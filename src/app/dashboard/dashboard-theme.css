@@ -1,0 +1,197 @@
+/* Dashboard-specific theme that only applies to dashboard components */
+/* Custom variant dark (&:is(.dark *)); - Dashboard Scoped */
+
+.dashboard-theme {
+  /* Root CSS variables for dashboard */
+  --font-size: 14px;
+  --background: #F6F3FF;
+  --foreground: #1E293B;
+  --card: #FFFFFF;
+  --card-foreground: #1E293B;
+  --popover: #FFFFFF;
+  --popover-foreground: #1E293B;
+  --primary: #8B5CF6;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F8F6FF;
+  --secondary-foreground: #475569;
+  --muted: #F8F6FF;
+  --muted-foreground: #64748B;
+  --accent: #8B5CF6;
+  --accent-foreground: #FFFFFF;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #E5E2F0;
+  --input: transparent;
+  --input-background: #FFFFFF;
+  --switch-background: #DDD6FE;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #8B5CF6;
+  --chart-1: #8B5CF6;
+  --chart-2: #3B82F6;
+  --chart-3: #10B981;
+  --chart-4: #F59E0B;
+  --chart-5: #EF4444;
+  --radius: 0.875rem;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1E293B;
+  --sidebar-primary: #8B5CF6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F8F6FF;
+  --sidebar-accent-foreground: #475569;
+  --sidebar-border: #E5E2F0;
+  --sidebar-ring: #8B5CF6;
+
+  /* Tailwind theme inline configuration for dashboard */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Text size definitions */
+  --text-2xl: 1.5rem;
+  --text-xl: 1.25rem;
+  --text-lg: 1.125rem;
+  --text-base: 1rem;
+
+  /* Base styling */
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: var(--font-size);
+}
+
+/* Dark mode for dashboard */
+.dark .dashboard-theme {
+  --background: #0F0A1A;
+  --foreground: #F1F5F9;
+  --card: #1E1B2E;
+  --card-foreground: #F1F5F9;
+  --popover: #1E1B2E;
+  --popover-foreground: #F1F5F9;
+  --primary: #A855F7;
+  --primary-foreground: #0F0A1A;
+  --secondary: #2D1B4E;
+  --secondary-foreground: #F1F5F9;
+  --muted: #2D1B4E;
+  --muted-foreground: #94A3B8;
+  --accent: #A855F7;
+  --accent-foreground: #0F0A1A;
+  --destructive: #EF4444;
+  --destructive-foreground: #F1F5F9;
+  --border: #2D1B4E;
+  --input: #2D1B4E;
+  --ring: #A855F7;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: #A855F7;
+  --chart-2: #60A5FA;
+  --chart-3: #34D399;
+  --chart-4: #FBBF24;
+  --chart-5: #F87171;
+  --sidebar: #1E1B2E;
+  --sidebar-foreground: #F1F5F9;
+  --sidebar-primary: #A855F7;
+  --sidebar-primary-foreground: #0F0A1A;
+  --sidebar-accent: #2D1B4E;
+  --sidebar-accent-foreground: #F1F5F9;
+  --sidebar-border: #2D1B4E;
+  --sidebar-ring: #A855F7;
+}
+
+/* Scoped base styles for dashboard */
+.dashboard-theme * {
+  border-color: var(--border);
+  outline-color: var(--ring);
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .dashboard-theme * {
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+}
+
+/**
+ * Base typography for dashboard theme. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+.dashboard-theme :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h1 {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+}
+
+.dashboard-theme :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h2 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+}
+
+.dashboard-theme :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h3 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+}
+
+.dashboard-theme :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h4 {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+}
+
+.dashboard-theme :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) p {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.5;
+}
+
+.dashboard-theme :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) label {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+}
+
+.dashboard-theme :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) button {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+}
+
+.dashboard-theme :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) input {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.5;
+}

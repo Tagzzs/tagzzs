@@ -1,0 +1,17 @@
+{
+  "name": "TAGZS - Personal Knowledge Management",
+  "short_name": "TAGZS",
+  "description": "Organize, tag, and discover your digital content with AI-powered insights",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}
