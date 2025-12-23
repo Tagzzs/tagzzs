@@ -1,0 +1,26 @@
+fastapi[standard]
+uvloop; platform_system != "Windows"
+beautifulsoup4
+PyMuPDF
+pytesseract
+Pillow
+numpy
+aiohttp
+requests
+python-dotenv
+groq
+chromadb
+transformers
+sentence-transformers
+langchain-core
+langchain-groq
+groq
+youtube-transcript-api
+trafilatura
+yt-dlp
+snscrape
+whisper
+pydub
+yt-dlp
+youtube-transcript-api
+ffmpeg-python
