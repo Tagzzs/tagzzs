@@ -21,7 +21,7 @@ import time
 from datetime import datetime
 from typing import List, Optional, Tuple, Dict, Any
 
-from .models import (
+from app.services.extractors.youtube.models import (
     YouTubeExtractionRequest,
     YouTubeExtractionResponse,
     YouTubeMetaData,
@@ -264,7 +264,7 @@ class YouTubeContentGenerator:
         """Lazy load Groq client"""
         if self._groq_client is None:
             try:
-                from ....clients.groq_client import get_groq_client
+                from app.clients.groq.groq_client import get_groq_client
 
                 self._groq_client = get_groq_client()
             except Exception as e:

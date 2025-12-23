@@ -112,8 +112,8 @@ def structure_youtube_for_refine_response(
     Returns:
         Structured dictionary matching extract-refine response format
     """
-    from utils.reading_time import calculate_reading_time
-    from utils.response_formatter import (
+    from app.utils.reading_time import calculate_reading_time
+    from app.utils.response_formatter import (
         generate_request_id,
         get_current_timestamp,
         extract_domain_info,
