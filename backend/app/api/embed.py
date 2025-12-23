@@ -18,7 +18,7 @@ async def embed_and_store_chunks(request: dict):
         from app.services.chunking.chunker import TextChunker
         from app.services.refiners.embeddings.generator import EmbeddingGenerator
         from app.services.refiners.embeddings.storage import ChromaCloudStorage
-        from app.connections.chroma import get_user_collection
+        from app.connections import get_user_collection
 
         # Validate request
         required_fields = ["user_id", "content_id", "extracted_text", "summary"]
@@ -125,7 +125,7 @@ async def embed_and_store_chunks(request: dict):
 async def delete_embeddings(request: dict):
     """Delete embeddings from Chroma Cloud when content is deleted."""
     try:
-        from app.connections.chroma import get_user_collection
+        from app.connections import get_user_collection
 
         start_time = time.time()
 
@@ -195,7 +195,7 @@ async def update_embeddings_metadata(request: dict):
     """Update embeddings metadata in Chroma Cloud when a tag is deleted."""
     try:
         import json
-        from app.connections.chroma import get_user_collection
+        from app.connections import get_user_collection
 
         start_time = time.time()
 
