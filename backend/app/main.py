@@ -3,6 +3,7 @@ Tagzzs Backend - Main Application
 
 FastAPI application with modular route structure.
 """
+from app.config import load_environment
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,8 @@ from app.api import (
     ollama_router,
     search_router,
 )
+
+load_environment()
 
 app = FastAPI(title="Tagzzs Backend", version="1.0.0")
 
