@@ -29,7 +29,14 @@ import {
 import { NavUser } from "./sidebar/nav-user";
 import { cn } from "@/lib/utils";
 
-const menuItems = [
+interface MenuItem {
+  title: string;
+  url: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  external?: boolean;
+}
+
+const menuItems: MenuItem[] = [
   {
     title: "Dashboard",
     url: "/dashboard",
