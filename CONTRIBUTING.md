@@ -75,16 +75,6 @@ Questions, suggestions, and thoughts are most welcome! You can reach us at:
 - [**Twitter**](https://x.com/TAGZS_OFFICIAL) : For more updates!
 - [**Discord**]() : Coming Soon!
 
-## Ways to contribute
-
-- Try Plane Cloud and the self hosting platform and give feedback
-- Add new integrations
-- Help with open [issues](https://github.com/makeplane/plane/issues) or [create your own](https://github.com/makeplane/plane/issues/new/choose)
-- Share your thoughts and suggestions with us
-- Help create tutorials and blog posts
-- Request a feature by submitting a proposal
-- Report a bug
-
 ## Code of Conduct
 Please note that this project is released with a [Contributor Code of Conduct](CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
 
