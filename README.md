@@ -1,26 +1,24 @@
 <div align="center">
 
-  [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
-  [![FastAPI](https://img.shields.io/badge/FastAPI-0.127-brightgreen?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
-  [![Python](https://img.shields.io/badge/Python-3.13-yellow?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-  [![Docker](https://img.shields.io/badge/Docker-27-blue?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.127-brightgreen?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Python](https://img.shields.io/badge/Python-3.13-yellow?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Docker](https://img.shields.io/badge/Docker-27-blue?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+
 </div>
 
 &nbsp;
 
-
 <div align="center">
   <img src="https://drive.google.com/uc?export=view&id=19FvUz9g0X2xXK-7cmDSkXume4PemDmiD" alt="TAGZZS" width="500"/>
 </div>
-
 
 <h3 align="center">
   Your AI Powered Second Brain.
   <br/>
   Organise your stuff into a searchable knowledge.
 </h3>
-
 
 <p align="center"> 
   <a href="https://github.com/Tagzzs/tagzzs/edit/main/README.md"> Documentation </a>· 
@@ -29,7 +27,6 @@
   <a href="https://tagzzs.com/discord"> Join Discord </a>· 
   <a href="https://x.com/TAGZS_OFFICIAL"> Connect on X </a> 
 </p>
-
 
 <div align="center">
   
@@ -45,9 +42,21 @@
 
 ### Prerequisites
 
+**Required:**
+
 - [Docker](https://docs.docker.com/get-docker/) 20.10 or higher
 - [Docker Compose](https://docs.docker.com/compose/install/) v2
-- (Optional) NVIDIA GPU + [Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for GPU acceleration
+
+**External Services (create free accounts):**
+
+- [Supabase](https://supabase.com) - Authentication & user database
+- [Firebase](https://firebase.google.com) - Content database
+- [Groq](https://console.groq.com) - LLM API for AI features
+- [Chroma Cloud](https://www.trychroma.com/) - Vector database (optional, for cloud embeddings)
+
+**Optional:**
+
+- NVIDIA GPU + [Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for GPU acceleration
 
 ### Installation
 
@@ -59,8 +68,7 @@ cd tagzzs
 # Copy environment variables
 cp .env.example .env.local
 
-# Edit .env.local with your API keys (required)
-# You'll need: Supabase, Firebase, Groq API keys
+# Edit .env.local with your API keys (see External Services Setup below)
 
 # Build and run
 docker compose up -d
@@ -73,6 +81,7 @@ docker compose up -d
 | **CPU** (default) | `docker compose up -d`               |
 | **GPU** (NVIDIA)  | `docker compose --profile gpu up -d` |
 
+> GPU recommended for better performance
 
 ### Access the Application
 
@@ -84,6 +93,96 @@ docker compose up -d
 
 ---
 
+## External Services Setup
+
+<details>
+<summary><strong>Supabase Setup</strong></summary>
+
+### 1. Create Supabase Project
+
+1. Go to [supabase.com](https://supabase.com) and create a new project
+2. Note down your **Project URL** and **Anon Key** from Settings → API
+
+### 2. Create Storage Buckets
+
+Go to **Storage** in your Supabase dashboard and create these buckets:
+
+- `user_avatars` - For user profile pictures
+- `user_uploads` - For user uploaded files
+- `user_thumbnails` - For content thumbnails
+
+### 3. Run Database Setup SQL
+
+Go to **SQL Editor** and run the [SQL](supabase/setup.sql):
+
+
+### 4. Update .env.local
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+</details>
+
+<details>
+<summary><strong>Firebase Setup</strong></summary>
+
+### 1. Create Firebase Project
+
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Create a new project
+3. Enable **Firestore Database** (start in test mode for development)
+
+### 2. Get Configuration
+
+1. Go to Project Settings → General
+2. Scroll to "Your apps" and create a Web app
+3. Copy the configuration values
+
+### 3. Generate Service Account Key
+
+1. Go to Project Settings → Service Accounts
+2. Click "Generate new private key"
+3. Save the JSON file securely
+
+### 4. Update .env.local
+
+```bash
+# Firebase Client SDK
+NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+
+# Firebase Admin SDK (from service account JSON)
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+</details>
+
+<details>
+<summary><strong>Groq API Setup</strong></summary>
+
+### 1. Get API Key
+
+1. Go to [Groq Console](https://console.groq.com)
+2. Create an account and generate an API key
+
+### 2. Update .env.local
+
+```bash
+GROQ_API_KEY=gsk_your_api_key_here
+```
+
+</details>
+
+---
 
 ## Common Commands
 
