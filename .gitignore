@@ -38,7 +38,7 @@ next-env.d.ts
 
 drafts/
 /extension/
-tagzs-backend
+data
 
 # Python
 __pycache__/

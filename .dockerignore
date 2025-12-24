@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.venv/
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Build artifacts
+.next/
+out/
+dist/
+build/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Environment (loaded at runtime)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Tests
+coverage/
+.pytest_cache/
+__tests__/
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Docker
+Dockerfile*
+docker-compose*.yaml
+.dockerignore
+
+# Logs
+*.log

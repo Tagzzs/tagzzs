@@ -1,0 +1,84 @@
+# =============================================================================
+# Tagzzs - Docker Compose (Development)
+# =============================================================================
+# Usage:
+#   CPU:  docker compose up -d
+#   GPU:  docker compose --profile gpu up -d
+#
+# License: Apache-2.0
+# =============================================================================
+
+services:
+  # CPU Mode (default)
+  tagzzs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production-cpu
+    image: tagzzs:cpu
+    container_name: tagzzs
+    pull_policy: build
+    profiles: ["cpu", "default"]
+    ports:
+      - "3000:3000"
+      - "8000:8000"
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      - NODE_ENV=development
+      - DEVICE_TYPE=cpu
+    volumes:
+      - model_cache:/root/.cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 && curl -f http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # GPU Mode (NVIDIA)
+  tagzzs-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production-gpu
+    image: tagzzs:gpu
+    container_name: tagzzs-gpu
+    pull_policy: build
+    profiles: ["gpu"]
+    ports:
+      - "3000:3000"
+      - "8000:8000"
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      - NODE_ENV=development
+      - DEVICE_TYPE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - model_cache:/root/.cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 && curl -f http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  model_cache:
+    name: tagzzs_model_cache
+
+networks:
+  default:
+    name: tagzzs-network
