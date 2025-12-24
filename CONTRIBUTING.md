@@ -72,7 +72,6 @@ Ensure to follow the same codebase structure including formatting with consisten
 Questions, suggestions, and thoughts are most welcome! You can reach us at:
 - [**Github Issues**](https://github.com/Tagzzs/tagzzs/issues) : Report bugs and request features
 - [**Discussions**](https://github.com/Tagzzs/tagzzs/discussions) : Ask question and share ideas
-- [**Email**](tagzs.official@gmail.com) : Reach out to maitainers first
 - [**Twitter**](https://x.com/TAGZS_OFFICIAL) : For more updates!
 - [**Discord**]() : Coming Soon!
 
