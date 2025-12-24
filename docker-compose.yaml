@@ -37,6 +37,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   # GPU Mode (NVIDIA)
   tagzzs-gpu:
