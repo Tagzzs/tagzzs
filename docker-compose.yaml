@@ -60,6 +60,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - model_cache:/root/.cache
+    privileged: true
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000 && curl -f http://localhost:8000/health"]
@@ -67,13 +68,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
 volumes:
   model_cache:
