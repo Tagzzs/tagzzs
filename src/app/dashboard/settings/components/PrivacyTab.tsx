@@ -1,5 +1,6 @@
 'use client'
 
+import useSWR from 'swr';
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ChevronDown, ChevronRight, MoreVertical, Chrome, Activity, Unlink2, Lock, Eye, EyeOff, AlertCircle, CheckCircle, Loader2, Mail } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/utils/supabase/client'
+import { db } from '@/lib/firebase/client'; 
+import { collection, onSnapshot, query, orderBy, doc} from 'firebase/firestore';
 
 interface ExtensionConnection {
   id: string;
@@ -68,40 +71,42 @@ export function PrivacyTab() {
   const { toast } = useToast()
   const supabase = createClient()
 
-  // Fetch extension connections
+  // Adding user state
+  const [user, setUser] = useState<any>(null);
+
+  // Get user session on load from supabase
   useEffect(() => {
-    const fetchExtensionData = async () => {
-      try {
-        setIsLoadingExtensions(true)
-        setExtensionError(null)
-        
-        const response = await fetch('/api/extension-data/connections', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
+  }, [supabase.auth]);
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch extension data')
-        }
+  
+  const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-        const result = await response.json()
-        console.log('Extension data loaded:', result)
-        
-        if (result.success && result.data) {
-          setExtensionData(result.data)
-        }
-      } catch (error) {
-        console.error('Error fetching extension data:', error)
-        setExtensionError(error instanceof Error ? error.message : 'Failed to load extension data')
-      } finally {
-        setIsLoadingExtensions(false)
-      }
+  // using swr libary to poll if extension connections
+  const { data, error, isLoading } = useSWR(
+    user ? '/api/extension-data/connections' : null,
+    fetcher,
+    { 
+      refreshInterval: 3000, // Polls every 3 seconds
+      revalidateOnFocus: true 
     }
+  );
 
-    fetchExtensionData()
-  }, [])
+  // updates extension data on page when a different list is fetched
+  useEffect(() => {
+    if (data?.success && data.data) {
+      setExtensionData(data.data);
+      setIsLoadingExtensions(false);
+    }
+    if (error) {
+      setExtensionError("Unable to fetch updates");
+    }
+  }, [data, error]);
+
 
   const formatDate = (date: Date | { toDate?: () => Date } | null | undefined) => {
     if (!date) return 'Never'
