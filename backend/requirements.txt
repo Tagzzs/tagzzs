@@ -2,6 +2,7 @@ fastapi[standard]
 uvloop; platform_system != "Windows"
 beautifulsoup4
 PyMuPDF
+pytesseract
 Pillow
 numpy
 aiohttp
@@ -16,7 +17,12 @@ langchain-groq
 youtube-transcript-api
 trafilatura
 yt-dlp
+snscrape
 whisper
 pydub
+yt-dlp
+youtube-transcript-api
 ffmpeg-python
+supabase
+firebase_admin
 google-genai

@@ -76,7 +76,7 @@ export default function SignInPage() {
       }
 
       // Call the API route for sign in
-      const response = await fetch('/api/auth/sign-in', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-in`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -162,6 +162,24 @@ export default function SignInPage() {
             break;
         }
       } else {
+        const { createClient: createBrowserClient } = await import("@/utils/supabase/client");
+        const supabase = createBrowserClient();
+
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.data.session.accessToken,
+          refresh_token: data.data.session.refreshToken,
+        });
+
+        if (sessionError) {
+          toast({
+            title: "Session Error",
+            description: "Failed to establish a local session. Please try again.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+
         toast({
           title: "Welcome back!",
           description: data.data?.message || "You have been signed in successfully.",

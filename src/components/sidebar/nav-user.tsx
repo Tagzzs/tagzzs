@@ -52,15 +52,22 @@ export function NavUser({
     setIsSigningOut(true);
     
     try {
-      const response = await fetch("/api/auth/sign-out", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-out`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
       });
-
+      
       const data = await response.json();
 
+      // Manually removing browser cookies
+      const { createClient: createBrowserClient } = await import("@/utils/supabase/client");
+      const supabase = createBrowserClient();
+      await supabase.auth.signOut();
+
+      router.refresh(); // Ensuring server components recognize the session is gone
+      
       if (data.success) {
         // Redirect to sign-in page after successful sign-out
         window.location.href = "/auth/sign-in";

@@ -11,6 +11,7 @@ from .health import router as health_router
 from .agent import router as agent_router
 from .chat import router as chat_router
 from .search import router as search_router
+from .auth.auth_routes import router as auth_router
 
 __all__ = [
     "extract_router",
@@ -20,4 +21,5 @@ __all__ = [
     "agent_router",
     "chat_router",
     "search_router",
+    "auth_router"
 ]
