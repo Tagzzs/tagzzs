@@ -24,3 +24,5 @@ pydub
 yt-dlp
 youtube-transcript-api
 ffmpeg-python
+supabase
+firebase_admin

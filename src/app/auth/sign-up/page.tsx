@@ -111,12 +111,13 @@ export default function SignUpPage() {
 
       if (!result.success) {
         setErrors(result.error.flatten().fieldErrors);
+        setIsLoading(false);
         return;
       }
         
 
       // Call the API route for sign up
-      const response = await fetch('/api/auth/sign-up', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-up`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,17 +146,37 @@ export default function SignUpPage() {
         return;
       }
 
-      // Success
-      toast({
-        title: "Success",
-        description: data.data?.message || "Account created successfully!",
-        variant: "default",
-      });
-      
-      // Redirect to dashboard after successful signup
-      setTimeout(() => {
+      if (data.data?.session) {
+        const { createClient: createBrowserClient } = await import("@/utils/supabase/client");
+        const supabase = createBrowserClient();
+
+        // Manually setting cookies
+        await supabase.auth.setSession({
+          access_token: data.data.session.accessToken,
+          refresh_token: data.data.session.refreshToken,
+        });
+
+        toast({
+          title: "Account Created",
+          description: "Welcome to Tagzzs! Redirecting you now...",
+          variant: "default",
+        });
+
+        router.refresh(); 
         router.push('/dashboard');
-      }, 2000);
+      } else {
+        // TODO: Set email confirmation first
+        toast({
+          title: "Verify your Email",
+          description: data.data?.message || "Please check your email to verify your account.",
+          variant: "default",
+        });
+
+        // Redirect to sign-in page instead of dashboard
+        setTimeout(() => {
+          router.push('/auth/sign-in');
+        }, 3000);
+      }
 
     } catch (error) {
       console.error('Sign up error:', error);

@@ -96,3 +96,6 @@ backend/.chroma_db/
 backend/node_modules/
 
 .ruff_cache/
+
+# Firebase configuration
+firebase-config.json

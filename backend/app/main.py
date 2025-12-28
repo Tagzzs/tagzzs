@@ -18,6 +18,7 @@ from app.api import (
     chat_router,
     ollama_router,
     search_router,
+    auth_router
 )
 
 load_environment()
@@ -48,6 +49,7 @@ app.include_router(agent_router)
 app.include_router(chat_router)
 app.include_router(ollama_router)
 app.include_router(search_router)
+app.include_router(auth_router)
 
 
 @app.get("/")
