@@ -66,21 +66,11 @@ def reset_all_singletons():
     Useful for reloading models and clearing memory.
     """
     try:
-        from ..classifier.classifier_client import (
-            reset_classifier,
-        )
         from ..image_engine.image_engine_client import (
             reset_image_engine,
         )
 
         logger.info("Resetting all singleton instances...")
-
-        # Reset classifier
-        try:
-            reset_classifier()
-            logger.info("✅ Classifier reset")
-        except Exception as e:
-            logger.warning(f"Failed to reset classifier: {e}")
 
         # Reset image engine
         try:

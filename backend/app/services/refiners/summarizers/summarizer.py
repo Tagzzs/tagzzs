@@ -137,7 +137,23 @@ class SummarizationEngine:
         if len(text) > max_text_chars:
             text_to_summarize += "..."
 
-        prompt = f"""Please provide a concise summary of the following text. 
+        word_count = len(text_to_summarize.split())
+
+        if word_count < min_length:
+            # Short text - don't summarize, just clean up and clarify
+            self.logger.info(
+                f"Text too short ({word_count} words) for summarization (min: {min_length}). Cleaning up instead."
+            )
+            prompt = f"""Please clean up, clarify, and format the following text taken from an image OCR result. 
+Make it readable and correct any obvious OCR errors.
+Keep it concise and preserve all information.
+
+Original OCR Text:
+{text_to_summarize}
+
+Cleaned Text:"""
+        else:
+            prompt = f"""Please provide a concise summary of the following text. 
 The summary should be between {min_length} and {max_length} words.
 Keep the summary factual and preserve the key information.
 

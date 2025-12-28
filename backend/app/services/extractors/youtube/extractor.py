@@ -488,102 +488,38 @@ class YouTubeTagGenerator:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def generate_tags(
+    async def generate_tags(
         self, text: str, existing_tags: List[str] = None, top_k: int = 10
     ) -> List[GeneratedTag]:
         """
-        Generate tags with confidence scores using zero-shot classification.
-
-        Falls back to LLM-provided tags or frequency-based extraction if classifier unavailable.
+        Generate tags with confidence scores using centralized Groq-based tag generator.
         """
         try:
-            return self._generate_via_classifier(text, top_k)
-        except Exception as e:
-            self.logger.warning(f"Zero-shot classifier failed: {e}")
-            # Convert existing tags to GeneratedTag format
-            if existing_tags:
+            from app.services.refiners.tag_generators import generate_tags
+
+            # Use the central tag generation service
+            response = await generate_tags(text=text, top_k=top_k)
+
+            if response.success:
                 return [
-                    GeneratedTag(tag=tag, confidence=0.8, slug=self._to_slug(tag))
-                    for tag in existing_tags[:top_k]
-                ]
-            return []
-
-    def _generate_via_classifier(self, text: str, top_k: int) -> List[GeneratedTag]:
-        """Generate tags using transformers zero-shot classification"""
-        try:
-            from ....clients import get_classifier
-        except ImportError:
-            raise RuntimeError("classifier_client not available")
-
-        # Comprehensive candidate labels for video content
-        candidate_labels = [
-            # Content types
-            "tutorial",
-            "review",
-            "vlog",
-            "documentary",
-            "interview",
-            "podcast",
-            "music video",
-            "short film",
-            "live stream",
-            "compilation",
-            # Topics
-            "technology",
-            "programming",
-            "science",
-            "education",
-            "business",
-            "finance",
-            "marketing",
-            "health",
-            "fitness",
-            "cooking",
-            "travel",
-            "gaming",
-            "sports",
-            "news",
-            "politics",
-            "entertainment",
-            "comedy",
-            "music",
-            "art",
-            "fashion",
-            "beauty",
-            "lifestyle",
-            "motivation",
-            "productivity",
-            "self-improvement",
-            "relationships",
-            "parenting",
-            "nature",
-            "animals",
-            "cars",
-            "architecture",
-            "history",
-            "philosophy",
-        ]
-
-        # Truncate text for classification
-        text_excerpt = text[:3000] if len(text) > 3000 else text
-
-        # Use singleton classifier to avoid repeated model loading
-        classifier = get_classifier()
-
-        result = classifier(text_excerpt, candidate_labels, multi_label=True)
-
-        tags = []
-        for label, score in zip(result.get("labels", []), result.get("scores", [])):
-            if score >= 0.1:  # Filter low confidence tags
-                tags.append(
                     GeneratedTag(
-                        tag=label, confidence=float(score), slug=self._to_slug(label)
+                        tag=tag.name, confidence=tag.score, slug=self._to_slug(tag.name)
                     )
-                )
+                    for tag in response.tags
+                ]
 
-        # Sort by confidence and return top_k
-        tags = sorted(tags, key=lambda x: x.confidence, reverse=True)[:top_k]
-        return tags
+            self.logger.warning(f"Central tag generation failed: {response.errors}")
+
+        except Exception as e:
+            self.logger.warning(f"Central tag generation service failed: {e}")
+
+        # Fallback to existing tags if any
+        if existing_tags:
+            return [
+                GeneratedTag(tag=tag, confidence=0.8, slug=self._to_slug(tag))
+                for tag in existing_tags[:top_k]
+            ]
+        return []
 
     def _to_slug(self, text: str) -> str:
         """Convert text to URL-friendly slug"""
@@ -732,7 +668,7 @@ class YouTubeExtractorEngine:
             tags = []
             if full_transcript:
                 try:
-                    tags = self.tag_generator.generate_tags(
+                    tags = await self.tag_generator.generate_tags(
                         text=full_transcript,
                         existing_tags=generated_content.get("tags", []),
                         top_k=10,
@@ -831,7 +767,9 @@ class YouTubeExtractorEngine:
             if os.path.exists(audio_path):
                 os.remove(audio_path)
         except Exception as e:
-            self.logger.warning(f"Failed to delete temp audio file: {audio_path}. Error: {e}")
+            self.logger.warning(
+                f"Failed to delete temp audio file: {audio_path}. Error: {e}"
+            )
             pass
 
         return full_text, segments

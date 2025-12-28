@@ -1,157 +1,160 @@
-"""
-Centralized Image AI Engine Client
-
-Manages singleton ImageAIEngineHybrid instance to avoid:
-- Repeated YOLO/CLIP/BLIP model loading (slow, memory intensive)
-- CUDA memory leaks from multiple model instances
-- Cache issues requiring __pycache__ removal
-
-Thread-safe singleton pattern ensures:
-- Models loaded once per process
-- Proper CUDA memory management
-- Consistent device usage
-"""
-
+import os
+import json
 import logging
-import threading
-from typing import Optional, Any
+import time
+from typing import Dict, Any
+from google import genai
+from google.genai import types
+from groq import Groq
+from app.config import load_environment
 
 logger = logging.getLogger(__name__)
 
-# Thread-safe singleton
-_image_engine = None
-_image_engine_lock = threading.Lock()
 
-
-class ImageEngineManager:
+class ImageEngineClient:
     """
-    Manages ImageAIEngineHybrid instance lifecycle.
-
-    Usage:
-        engine = ImageEngineManager.get_engine()
-        result = engine.analyze_image(None, image_url)
+    Modern Vision Engine using Groq Llama 3.2 Vision with Gemini Fallback.
+    Implements a single-pass "Smart Router" logic.
     """
 
-    _instance: Optional[Any] = None
-    _lock = threading.Lock()
+    SYSTEM_PROMPT = """
+You are an intelligent Vision Engine. Classify this image and extract content.
 
-    def __init__(
-        self,
-        yolo_model: str = "yolov8s.pt",
-        clip_model: str = "openai/clip-vit-base-patch32",
-        caption_model: str = "Salesforce/blip-image-captioning-base",
-        device: Optional[str] = None,
-    ):
+Step 1: CLASSIFY
+- If the image contains dense text, lists, receipts, documents, or signs: Classify as "ocr".
+- If the image is a photo of a person, object, landscape, or scene: Classify as "description".
+
+Step 2: PROCESS
+- If "ocr": Extract ALL visible text verbatim. Preserve line breaks.
+- If "description": Write a detailed, factual caption.
+
+Step 3: OUTPUT
+Return ONLY valid JSON with this schema:
+{
+  "detected_type": "ocr" | "description",
+  "content": "string",
+  "confidence": float
+}
+"""
+
+    def __init__(self):
+        load_environment()
+
+        self.groq_api_key = os.getenv("GROQ_API_KEY")
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+
+        if not self.groq_api_key:
+            logger.warning("GROQ_API_KEY not found in environment")
+        if not self.gemini_api_key:
+            logger.warning("GEMINI_API_KEY not found in environment")
+
+        self.groq_client = (
+            Groq(api_key=self.groq_api_key) if self.groq_api_key else None
+        )
+
+        if self.gemini_api_key:
+            self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+        else:
+            self.gemini_client = None
+
+    async def analyze_image(self, image_url: str) -> Dict[str, Any]:
         """
-        Initialize image AI engine.
-
-        Args:
-            yolo_model: YOLO model file path
-            clip_model: CLIP model name from HuggingFace
-            caption_model: BLIP caption model name
-            device: 'cuda' or 'cpu'. Defaults to auto-detect.
+        Analyze image using Groq with Gemini fallback.
         """
-        try:
-            from app.services.extractors.image.image_ai_engine import ImageAIEngineHybrid
-        except ImportError:
-            raise ImportError("image_ai_engine module not available")
-
-        logger.info(f"Initializing ImageAIEngine with YOLO={yolo_model}")
+        start_time = time.time()
 
         try:
-            self.engine = ImageAIEngineHybrid(
-                yolo_model=yolo_model,
-                clip_model=clip_model,
-                caption_model=caption_model,
-                device=device,
-            )
-            logger.info(
-                f"✅ ImageAIEngine initialized successfully on device: {self.engine.device}"
-            )
+            if not self.groq_client:
+                raise ValueError("Groq client not initialized (missing API key)")
+
+            result = await self._call_groq(image_url)
+            result["processing_time_ms"] = int((time.time() - start_time) * 1000)
+            result["model"] = "groq"
+            return result
+
         except Exception as e:
-            logger.error(f"Failed to initialize image engine: {str(e)}")
-            raise
+            logger.error(f"Groq API call failed: {e}. Attempting Gemini fallback...")
+            try:
+                result = await self._call_gemini_fallback(image_url)
+                result["processing_time_ms"] = int((time.time() - start_time) * 1000)
+                result["model"] = "gemini"
+                return result
+            except Exception as fe:
+                logger.error(f"Gemini fallback failed: {fe}")
+                raise Exception(
+                    f"Vision analysis failed: {str(e)} -> Fallback error: {str(fe)}"
+                )
 
-    @classmethod
-    def get_instance(
-        cls, yolo_model: str = "yolov8s.pt", force_reinit: bool = False
-    ) -> "ImageEngineManager":
+    async def _call_groq(self, image_url: str) -> Dict[str, Any]:
         """
-        Get or create singleton instance of ImageEngineManager.
-
-        Thread-safe implementation using double-checked locking.
-
-        Args:
-            yolo_model: YOLO model to use
-            force_reinit: Force reinitialization even if instance exists
-
-        Returns:
-            ImageEngineManager singleton instance
+        Perform analysis using Groq Llama 3.2 Vision
         """
-        if cls._instance is None or force_reinit:
-            with cls._lock:
-                if cls._instance is None or force_reinit:
-                    try:
-                        cls._instance = cls(yolo_model=yolo_model)
-                    except Exception as e:
-                        logger.error(f"Failed to create ImageEngineManager: {str(e)}")
-                        raise
-        return cls._instance
+        completion = self.groq_client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self.SYSTEM_PROMPT},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": image_url,
+                            },
+                        },
+                    ],
+                }
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
 
-    @classmethod
-    def get_engine(cls, yolo_model: str = "yolov8s.pt") -> Any:
+        content = completion.choices[0].message.content
+        return json.loads(content)
+
+    async def _call_gemini_fallback(self, image_url: str) -> Dict[str, Any]:
         """
-        Get the underlying image AI engine.
-
-        Args:
-            yolo_model: YOLO model to use
-
-        Returns:
-            ImageAIEngineHybrid instance
+        Perform analysis using Gemini 2.5 Flash via new google-genai SDK
         """
-        manager = cls.get_instance(yolo_model=yolo_model)
-        return manager.engine
+        if not self.gemini_client:
+            raise ValueError("Gemini client not initialized (missing API key)")
 
-    @classmethod
-    def _cleanup_instance(cls):
-        """Clean up CUDA memory from old instance"""
-        try:
-            import torch
+        import aiohttp
 
-            if cls._instance is not None:
-                del cls._instance.engine
-                cls._instance = None
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                logger.info("Cleaned up previous image engine instance")
-        except Exception as e:
-            logger.warning(f"Error during image engine cleanup: {e}")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_url) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Failed to download image from {image_url}")
+                image_bytes = await resp.read()
 
-    @classmethod
-    def reset(cls):
-        """Reset the singleton instance. Useful for testing or memory cleanup."""
-        with cls._lock:
-            cls._cleanup_instance()
-            logger.info("ImageEngineManager singleton reset")
+        image_part = types.Part.from_bytes(
+            data=image_bytes,
+            mime_type="image/*",
+        )
+
+        response = self.gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[self.SYSTEM_PROMPT, image_part],
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                response_mime_type="application/json",
+            ),
+        )
+
+        return json.loads(response.text)
 
 
-def get_image_engine(yolo_model: str = "yolov8s.pt") -> Any:
-    """
-    Convenience function to get image AI engine.
+# Singleton helper
+_engine_client = None
 
-    Args:
-        yolo_model: YOLO model to use (default: yolov8s.pt)
 
-    Returns:
-        ImageAIEngineHybrid instance
-
-    Example:
-        engine = get_image_engine()
-        result = engine.analyze_image(None, "https://example.com/image.jpg")
-    """
-    return ImageEngineManager.get_engine(yolo_model=yolo_model)
+def get_image_engine():
+    global _engine_client
+    if _engine_client is None:
+        _engine_client = ImageEngineClient()
+    return _engine_client
 
 
 def reset_image_engine():
-    """Reset image engine to free CUDA memory"""
-    ImageEngineManager.reset()
+    global _engine_client
+    _engine_client = None

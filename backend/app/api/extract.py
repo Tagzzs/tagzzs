@@ -3,10 +3,9 @@ Extraction Routes
 API endpoints for content extraction (website, pdf, image, video, youtube)
 """
 
-import asyncio
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, HttpUrl
 
 router = APIRouter(tags=["extraction"])
@@ -22,7 +21,7 @@ class PDFExtractionRequest(BaseModel):
 
 
 class ImageExtractionRequest(BaseModel):
-    url: HttpUrl
+    url: str
 
 
 class YouTubeExtractionRequest(BaseModel):
@@ -80,56 +79,27 @@ async def extract_pdf(request: PDFExtractionRequest):
 
 @router.post("/extract/image")
 async def extract_image(request: ImageExtractionRequest):
-    """Extract text content from an image URL using OCR (Image AI engine)"""
+    """Extract text content or description from an image URL using AI Vision Engine"""
     try:
         from app.clients.image_engine import get_image_engine
 
-        engine = get_image_engine(yolo_model="yolov8s.pt")
-        result = await asyncio.to_thread(engine.analyze_image, None, str(request.url))
+        engine = get_image_engine()
+        result = await engine.analyze_image(str(request.url))
 
-        cleaned_data = {
-            "full_text": result.get("ocr_text", "") or "",
-            "caption": result.get("caption", ""),
-            "description": result.get("description", ""),
-            "tags": [t["tag"] for t in result.get("tags", [])],
-            "tags_with_scores": result.get("tags", []),
-        }
-
-        response = {
+        return {
             "success": True,
+            "detected_type": result.get("detected_type"),
+            "content": result.get("content"),
+            "confidence": result.get("confidence"),
             "url": str(request.url),
-            "raw_data": None,
-            "cleaned_data": cleaned_data,
-            "meta_data": result.get("meta", {}),
-            "extracted_time": datetime.utcnow().isoformat() + "Z",
-            "processing_time_ms": None,
-            "errors": [],
+            "extracted_at": datetime.utcnow().isoformat() + "Z",
+            "processing_time_ms": result.get("processing_time_ms"),
+            "model": result.get("model"),
         }
-
-        return response
 
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Image extraction failed: {str(e)}"
-        )
-
-
-@router.post("/extract/video")
-async def extract_video(request: ImageExtractionRequest):
-    """Extract transcript, summary and tags from a video URL"""
-    try:
-        from app.services.extractors.videos.orchestrator import extract_video_content
-        from app.services.extractors.videos.output_structuring import (
-            structure_video_extraction_output,
-        )
-
-        response = await extract_video_content(str(request.url))
-        structured_output = structure_video_extraction_output(response)
-        return structured_output
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Video extraction failed: {str(e)}"
         )
 
 
@@ -159,38 +129,3 @@ async def extract_youtube(request: YouTubeExtractionRequest):
         raise HTTPException(
             status_code=500, detail=f"YouTube extraction failed: {str(e)}"
         )
-
-
-@router.post("/extract/video-file")
-async def extract_video_file(file: UploadFile = File(...)):
-    """Upload a video/audio file and extract transcript, summary and tags locally."""
-    import tempfile
-    import os
-
-    try:
-        suffix = os.path.splitext(file.filename)[1] or ".mp4"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            contents = await file.read()
-            tmp.write(contents)
-            tmp_path = tmp.name
-
-        from app.services.extractors.videos.orchestrator import extract_video_content
-        from app.services.extractors.videos.output_structuring import (
-            structure_video_extraction_output,
-        )
-
-        response = await extract_video_content(f"file://{tmp_path}")
-        structured = structure_video_extraction_output(response)
-
-        return structured
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Video file extraction failed: {str(e)}"
-        )
-    finally:
-        try:
-            if "tmp_path" in locals() and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-        except Exception:
-            pass

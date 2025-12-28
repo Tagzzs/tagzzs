@@ -3,6 +3,7 @@ Tagzzs Backend - Main Application
 
 FastAPI application with modular route structure.
 """
+
 from app.config import load_environment
 
 from fastapi import FastAPI
@@ -16,7 +17,6 @@ from app.api import (
     health_router,
     agent_router,
     chat_router,
-    ollama_router,
     search_router,
 )
 
@@ -46,7 +46,6 @@ app.include_router(embed_router)
 app.include_router(health_router)
 app.include_router(agent_router)
 app.include_router(chat_router)
-app.include_router(ollama_router)
 app.include_router(search_router)
 
 
@@ -57,4 +56,5 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -3,7 +3,6 @@ Refinement Routes
 API endpoints for content refinement pipelines (extract-refine combos)
 """
 
-import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, HttpUrl
 
@@ -181,18 +180,20 @@ async def extract_and_refine_auto(request: dict):
             )
             from app.utils.response_formatter import format_extract_refine_response
 
-            engine = get_image_engine(yolo_model="yolov8s.pt")
-            analysis = await asyncio.to_thread(
-                engine.analyze_image, None, str(request["url"])
-            )
+            engine = get_image_engine()
+            analysis = await engine.analyze_image(str(request["url"]))
 
-            ocr_text = analysis.get("ocr_text", "") or ""
-            if ocr_text.strip():
+            detected_type = analysis.get("detected_type")
+            content = analysis.get("content", "")
+
+            if detected_type == "ocr" and content.strip():
                 refinement_response = await process_extracted_content(
-                    extracted_text=ocr_text,
+                    extracted_text=content,
                     source_url=str(request["url"]),
                     source_type="image",
-                    config=RefinementConfig(),
+                    config=RefinementConfig(
+                        summary_min_length=20, summary_max_length=150
+                    ),
                 )
                 refined_dict = refinement_response.to_dict()
                 return format_extract_refine_response(
@@ -202,19 +203,30 @@ async def extract_and_refine_auto(request: dict):
                     tags_confidence=refined_dict.get("tags_confidence"),
                     url=str(request["url"]),
                     content_type="image",
-                    original_text_length=len(ocr_text),
-                    word_count=len(ocr_text.split()),
-                    raw_content=ocr_text,
+                    original_text_length=len(content),
+                    word_count=len(content.split()),
+                    raw_content=content,
                 )
             else:
-                # Vision-only fallback
-                caption = analysis.get("caption") or ""
-                tags = [t["tag"] for t in analysis.get("tags", [])]
-                vision_summary = caption or "Image analysis completed (vision-only)."
+                # Vision-only path or OCR failed
+                from app.services.refiners.tag_generators import generate_tags
+
+                vision_summary = (
+                    content or "Image analysis completed (description-only)."
+                )
+
+                # Generate tags for the vision description
+                tag_response = await generate_tags(text=vision_summary, top_k=5)
+                vision_tags = (
+                    [tag.name for tag in tag_response.tags]
+                    if tag_response.success
+                    else []
+                )
+
                 return format_extract_refine_response(
                     title="Image Content",
                     summary=vision_summary,
-                    tags=tags,
+                    tags=vision_tags,
                     tags_confidence=None,
                     url=str(request["url"]),
                     content_type="image",
@@ -398,19 +410,49 @@ async def extract_and_refine_image(request: ImageExtractionRequest):
         )
         from app.utils.response_formatter import format_extract_refine_response
 
-        engine = get_image_engine(yolo_model="yolov8s.pt")
-        analysis = await asyncio.to_thread(engine.analyze_image, None, str(request.url))
+        engine = get_image_engine()
+        analysis = await engine.analyze_image(str(request.url))
 
-        ocr_text = analysis.get("ocr_text", "") or ""
-        if not ocr_text.strip():
+        detected_type = analysis.get("detected_type")
+        content = analysis.get("content", "")
+
+        if detected_type == "ocr" and content.strip():
+            # OCR exists -> refine
+            refinement_response = await process_extracted_content(
+                extracted_text=content,
+                source_url=str(request.url),
+                source_type="image",
+                config=RefinementConfig(summary_min_length=20, summary_max_length=150),
+            )
+
+            refined_dict = refinement_response.to_dict()
+            return format_extract_refine_response(
+                title="Image Content",
+                summary=refined_dict.get("summary", ""),
+                tags=refined_dict.get("tags", []),
+                tags_confidence=refined_dict.get("tags_confidence"),
+                url=str(request.url),
+                content_type="image",
+                original_text_length=len(content),
+                word_count=len(content.split()),
+                raw_content=content,
+            )
+        else:
             # Vision only path
-            caption = analysis.get("caption") or ""
-            tags = [t["tag"] for t in analysis.get("tags", [])]
-            vision_summary = caption or "Image analysis completed (vision-only)."
+            from app.services.refiners.tag_generators import generate_tags
+
+            vision_summary = content or "Image analysis completed (description-only)."
+
+            # Generate tags for the vision description
+            tag_response = await generate_tags(text=vision_summary, top_k=5)
+            vision_tags = (
+                [tag.name for tag in tag_response.tags] if tag_response.success else []
+            )
+
             return format_extract_refine_response(
                 title="Image Content",
                 summary=vision_summary,
-                tags=tags,
+                tags=vision_tags,
                 tags_confidence=None,
                 url=str(request.url),
                 content_type="image",
@@ -418,27 +460,6 @@ async def extract_and_refine_image(request: ImageExtractionRequest):
                 word_count=0,
                 raw_content="",
             )
-
-        # OCR exists -> refine
-        refinement_response = await process_extracted_content(
-            extracted_text=ocr_text,
-            source_url=str(request.url),
-            source_type="image",
-            config=RefinementConfig(),
-        )
-
-        refined_dict = refinement_response.to_dict()
-        return format_extract_refine_response(
-            title="Image Content",
-            summary=refined_dict.get("summary", ""),
-            tags=refined_dict.get("tags", []),
-            tags_confidence=refined_dict.get("tags_confidence"),
-            url=str(request.url),
-            content_type="image",
-            original_text_length=len(ocr_text),
-            word_count=len(ocr_text.split()),
-            raw_content=ocr_text,
-        )
 
     except Exception as e:
         raise HTTPException(

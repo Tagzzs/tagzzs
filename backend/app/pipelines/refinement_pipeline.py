@@ -36,14 +36,14 @@ class RefinementConfig:
 
     def __init__(
         self,
-        max_summary_length: int = 500,
-        min_summary_length: int = 100,
+        summary_max_length: int = 500,
+        summary_min_length: int = 100,
         top_tags: int = 5,
         chroma_collection: str = "tagzs_refined_content",
     ):
         """Initialize refinement configuration"""
-        self.max_summary_length = max_summary_length
-        self.min_summary_length = min_summary_length
+        self.summary_max_length = summary_max_length
+        self.summary_min_length = summary_min_length
         self.top_tags = top_tags
         self.chroma_collection = chroma_collection
 
@@ -131,9 +131,9 @@ class RefinementPipeline:
         }
 
         try:
-            if not extracted_text or len(extracted_text.strip()) < 50:
+            if not extracted_text or len(extracted_text.strip()) < 5:
                 raise ValueError(
-                    "Extracted text too short for processing (minimum 50 chars)"
+                    "Extracted text too short for processing (minimum 5 chars)"
                 )
 
             self.logger.info(
@@ -147,8 +147,8 @@ class RefinementPipeline:
 
                 summary_response = await summarize_content(
                     text=extracted_text,
-                    max_length=self.config.max_summary_length,
-                    min_length=self.config.min_summary_length,
+                    max_length=self.config.summary_max_length,
+                    min_length=self.config.summary_min_length,
                 )
 
                 if summary_response.success:
@@ -164,7 +164,7 @@ class RefinementPipeline:
                         f"⚠️ Summarization failed: {summary_response.errors}"
                     )
                     response.errors.extend(summary_response.errors)
-                    response.summary = extracted_text[: self.config.max_summary_length]
+                    response.summary = extracted_text[: self.config.summary_max_length]
                     response.processing_times_ms["summarization"] = (
                         summary_response.processing_time_ms
                     )
@@ -173,7 +173,7 @@ class RefinementPipeline:
                 error_msg = f"Summarization failed: {str(e)}"
                 self.logger.error(error_msg)
                 response.errors.append(error_msg)
-                response.summary = extracted_text[: self.config.max_summary_length]
+                response.summary = extracted_text[: self.config.summary_max_length]
                 response.processing_times_ms["summarization"] = int(
                     (time.time() - summarization_start) * 1000
                 )
@@ -234,6 +234,7 @@ class RefinementPipeline:
 
 
 # ========== CONVENIENCE FUNCTIONS ==========
+
 
 async def process_extracted_content(
     extracted_text: str,

@@ -57,15 +57,28 @@ class TagGenerationResponse(BaseModel):
 class TagGenerationConfig(BaseModel):
     """Configuration for tag generation engine using Groq API"""
 
-    model_name: str = (
-        "llama-3.1-8b-instant"
-    )
+    model_name: str = "llama-3.1-8b-instant"
     api_key: str = ""
 
     temperature: float = 0.7
     top_p: float = 0.9
 
     candidate_labels: List[str] = [
+        # Content Types & Formats
+        "Tutorial",
+        "Guide",
+        "Review",
+        "Vlog",
+        "Documentary",
+        "Interview",
+        "Podcast",
+        "News",
+        "Opinion",
+        "Report",
+        "Case Study",
+        "Research Paper",
+        "Documentation",
+        # Technology & Engineering
         "AI",
         "Machine Learning",
         "Deep Learning",
@@ -73,15 +86,53 @@ class TagGenerationConfig(BaseModel):
         "Computer Vision",
         "Transformer",
         "Neural Networks",
-        "Attention Mechanism",
-        "Data Science",
-        "Research",
         "Python",
-        "Technology",
+        "Software Development",
+        "Web Infrastructure",
+        "Cloud Computing",
+        "Cybersecurity",
+        "Blockchain",
+        # Science & Education
+        "Science",
         "Education",
-        "Tutorial",
-        "Guide",
-        "News",
+        "Physics",
+        "Biology",
+        "Chemistry",
+        "Mathematics",
+        "History",
+        "Philosophy",
+        "Sociology",
+        # Business & Finance
+        "Business",
+        "Finance",
+        "Marketing",
+        "Entrepreneurship",
+        "Productivity",
+        "Management",
+        "Economics",
+        # Lifestyle & Entertainment
+        "Health",
+        "Fitness",
+        "Cooking",
+        "Travel",
+        "Gaming",
+        "Sports",
+        "Music",
+        "Art",
+        "Fashion",
+        "Beauty",
+        "Movie Review",
+        "Entertainment",
+        "Comedy",
+        "Motivation",
+        # Society & Nature
+        "Politics",
+        "Environment",
+        "Sustainability",
+        "Architecture",
+        "Animals",
+        "Nature",
+        "Space Exploration",
     ]
 
     # API settings
