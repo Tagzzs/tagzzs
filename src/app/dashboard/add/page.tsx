@@ -91,7 +91,7 @@ export default function AddContentPage() {
     setExtractionError(null)
     
     try {
-      const response = await fetch('/api/content/extract', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/content/extract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
