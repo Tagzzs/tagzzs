@@ -3,20 +3,22 @@ import time
 import uuid
 import httpx
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Union
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from pydantic import BaseModel, Field, HttpUrl
 from supabase import create_client, Client
+from urllib.parse import urlparse
 
 # Internal imports 
 from app.services.firebase.firebase_admin_setup import admin_db
 from app.services.firebase.firebase_user_service import FirebaseUserService
 from app.services.token_verifier import get_current_user
-from app.services.tag_count_service import update_multiple_tag_counts
+from app.services.tag_count_service import update_multiple_tag_counts, update_tag_counts_on_array_change
 from app.utils.supabase.auth import create_auth_error, create_auth_response
 
         
@@ -57,6 +59,21 @@ class ContentDataSchema(BaseModel):
 
     class Config:
         populate_by_name = True
+
+
+# update schemas
+class UpdateFields(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    link: Optional[str] = None
+    contentType: Optional[str] = None
+    personalNotes: Optional[str] = None
+    readTime: Optional[str] = None
+    tagsId: Optional[List[str]] = None
+
+class PutRequestBody(UpdateFields):
+    userId: str
+    contentId: str
 
 
 router = APIRouter(prefix="/api/user-database/content", tags=["Content Management"])
@@ -361,3 +378,165 @@ async def delete_content(request: Request, user: Dict[str, Any] = Depends(get_cu
             content={'error': 'Internal server error'},
             status_code=500
         )
+
+
+@router.put("/edit")
+async def update_content(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        if not user:
+            return create_auth_error('Authentication required to delete content')
+        
+        body_dict = await request.json()
+        
+        user_id = body_dict.get("userId")
+        content_id = body_dict.get("contentId")
+        
+        # Validate required fields
+        if not user_id:
+            return JSONResponse(status_code=400, content={"error": "User ID is required"})
+        
+        if not content_id:
+            return JSONResponse(status_code=400, content={"error": "Content ID is required"})
+
+        # Check if user exists in Firebase
+        user_ref = admin_db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            return JSONResponse(status_code=404, content={"error": "User not found"})
+
+        # Get reference to the content document
+        content_ref = user_ref.collection('content').document(content_id)
+
+        # Check if content exists and get original data
+        content_doc = content_ref.get()
+        if not content_doc.exists:
+            return JSONResponse(status_code=404, content={"error": "Content not found"})
+
+        original_content_data = content_doc.to_dict()
+
+        # Define allowed fields
+        allowed_fields = [
+            'link', 'title', 'description', 'contentType', 
+            'contentSource', 'personalNotes', 'readTime', 'tagsId'
+        ]
+
+        # Filter update fields
+        filtered_update_fields = {}
+        for key, value in body_dict.items():
+            if key in allowed_fields and value is not None:
+                filtered_update_fields[key] = value
+
+        # Check if there are any valid fields to update
+        if not filtered_update_fields:
+            return JSONResponse(
+                status_code=400, 
+                content={
+                    "error": "No valid fields provided for update",
+                    "allowedFields": allowed_fields
+                }
+            )
+
+        # Validate the update fields
+        validation_errors = []
+
+        if "link" in filtered_update_fields:
+            try:
+                result = urlparse(filtered_update_fields["link"])
+                if not all([result.scheme, result.netloc]):
+                    raise ValueError
+            except:
+                validation_errors.append("Invalid URL format for link")
+
+        if filtered_update_fields.get("title") and len(filtered_update_fields["title"]) > 50:
+            validation_errors.append("Title exceeds 50 character limit")
+
+        if filtered_update_fields.get("description") and len(filtered_update_fields["description"]) > 250:
+            validation_errors.append("Description exceeds 250 character limit")
+
+        if filtered_update_fields.get("contentType") and len(filtered_update_fields["contentType"]) > 25:
+            validation_errors.append("Content type exceeds 25 character limit")
+
+        if filtered_update_fields.get("personalNotes") and len(filtered_update_fields["personalNotes"]) > 100:
+            validation_errors.append("Personal notes exceed 100 character limit")
+
+        if filtered_update_fields.get("readTime"):
+            if not re.match(r"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$", filtered_update_fields["readTime"]):
+                validation_errors.append("Invalid time format for readTime (should be HH:MM)")
+
+        # Return validation errors if any
+        if validation_errors:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Validation failed", "details": validation_errors}
+            )
+
+        # Prepare update payload
+        update_payload = {**filtered_update_fields}
+        update_payload["updatedAt"] = datetime.utcnow().isoformat() + "Z"
+
+        # If link is being updated, update contentSource
+        if "link" in filtered_update_fields:
+            try:
+                update_payload["contentSource"] = urlparse(filtered_update_fields["link"]).hostname
+            except:
+                pass
+
+        # Update the document
+        content_ref.update(update_payload)
+
+        # Update tag counts if tagsId changed
+        old_tag_ids = original_content_data.get("tagsId", [])
+        new_tag_ids = filtered_update_fields.get("tagsId")
+        
+        if new_tag_ids is not None:
+            await update_tag_counts_on_array_change(user_id, old_tag_ids, new_tag_ids)
+
+        # Get updated document
+        updated_doc = content_ref.get()
+        updated_data = updated_doc.to_dict()
+
+        updated_data["id"] = updated_doc.id
+
+        return {
+            "success": True,
+            "message": "Content updated successfully",
+            "updatedFields": list(filtered_update_fields.keys()),
+            "data": updated_data
+        }
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+
+@router.get("/edit")
+async def get_content(user_id: str = Query(...), content_id: str = Query(...), user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        if not user:
+            return create_auth_error('Authentication required to delete content')
+
+        # Check if user exists
+        user_ref = admin_db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            return JSONResponse(status_code=404, content={"error": "User not found"})
+
+        # Get the content document
+        content_ref = user_ref.collection('content').document(content_id)
+        content_doc = content_ref.get()
+        
+        if not content_doc.exists:
+            return JSONResponse(status_code=404, content={"error": "Content not found"})
+
+        content_data = content_doc.to_dict()
+        content_data["id"] = content_doc.id
+
+        return {
+            "success": True, 
+            "data": content_data
+        }
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": "Internal server error"})

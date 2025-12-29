@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation"
 import { marked } from 'marked'
 import Image from "next/image"
 import { createClient } from '@/utils/supabase/client'
+import { createAuthError } from "@/utils/supabase/auth"
 
 
 // Configure marked for safe HTML output
@@ -233,14 +234,25 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
     try {
       setIsSaving(true)
-      
+
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { user } } = await supabase.auth.getUser()
+      const token = session?.access_token
+
+      if(!user) {
+        createAuthError("Authentication Error. Sign-in and try again.")
+      }
+            
       // Make API call to update content notes
-      const response = await fetch('/api/user-database/content/edit', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/edit`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          userId: user!.id,
           contentId: contentItem.id,
           personalNotes: editedNotes
         })
@@ -257,7 +269,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       }
 
       // Update local state with the returned data
-      setContentItem(result.data)
+      setContentItem({...result.data, id: contentItem.id})
       setIsEditing(false)
     } catch (error) {
       console.error('Error saving notes:', error)
