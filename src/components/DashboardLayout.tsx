@@ -7,6 +7,7 @@ import { CalendarWidget } from "@/components/CalendarWidget";
 import { Box, CssBaseline, Container } from "@mui/material";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { CalendarDays } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 interface ContentItem {
   id: string;
@@ -43,14 +44,20 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
 
+  
   useEffect(() => {
     const fetchDashboardData = async () => {
       setIsLoading(true);
+
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
       try {
         const [contentRes, tagsRes] = await Promise.all([
-          fetch("/api/user-database/content/get", {
+          fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}`},
             body: JSON.stringify({}), 
           }),
           fetch("/api/user-database/tags/get", {

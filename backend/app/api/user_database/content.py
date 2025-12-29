@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from pydantic import BaseModel, Field, HttpUrl
 from supabase import create_client, Client
 from urllib.parse import urlparse
+from google.cloud.firestore import Query, FieldFilter
 
 # Internal imports 
 from app.services.firebase.firebase_admin_setup import admin_db
@@ -74,6 +75,15 @@ class UpdateFields(BaseModel):
 class PutRequestBody(UpdateFields):
     userId: str
     contentId: str
+
+
+# get schema
+class ContentQueryFilters(BaseModel):
+    limit: Optional[int] = Field(None, gt=0, le=100)
+    offset: Optional[int] = 0
+    tagId: Optional[str] = None
+    contentType: Optional[str] = None
+    sortBy: Optional[str] = "newest"
 
 
 router = APIRouter(prefix="/api/user-database/content", tags=["Content Management"])
@@ -540,3 +550,77 @@ async def get_content(user_id: str = Query(...), content_id: str = Query(...), u
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+
+@router.post("/get")
+async def get_user_content(
+    request: Request, 
+    user: dict = Depends(get_current_user)
+):
+    try:
+        if not user:
+            return create_auth_error('Authentication required to delete content')
+        
+        user_id = user["id"]
+        
+        # Parse request body
+        try:
+            body_data = await request.json()
+        except Exception:
+            pass
+        filters = ContentQueryFilters(**body_data)
+
+        query = admin_db.collection('users').document(user_id).collection('content')
+
+        if filters.tagId:
+            query = query.where(filter=FieldFilter('tagsId', '==', filters.tagId))
+        if filters.contentType:
+            query = query.where(filter=FieldFilter('contentType', '==', filters.contentType))
+
+        # Apply Sorting
+        if filters.sortBy == 'oldest':
+            query = query.order_by('createdAt', direction=Query.ASCENDING)
+        elif filters.sortBy == 'title':
+            query = query.order_by('title', direction=Query.ASCENDING)
+        elif filters.sortBy == 'updated':
+            query = query.order_by('updatedAt', direction=Query.DESCENDING)
+        else:
+            query = query.order_by('createdAt', direction=Query.DESCENDING)
+            
+
+        # Pagination
+        if filters.limit:
+            query = query.limit(filters.limit)
+        if filters.offset and filters.offset > 0:
+            query = query.offset(filters.offset)
+
+        
+        docs = query.stream()
+        
+        content_list = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            content_list.append(data)
+
+        return {
+            "success": True,
+            "data": content_list,
+            "count": len(content_list),
+            "pagination": {
+                "limit": filters.limit,
+                "offset": filters.offset,
+                "hasMore": len(content_list) == filters.limit if filters.limit else False
+            }
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": {"code": "INTERNAL_ERROR", "message": str(e)}
+            }
+        )

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { createClient } from "@/utils/supabase/client"
 
 import {
   Search,
@@ -471,16 +472,23 @@ export default function LibraryPage() {
         setIsLoading(true)
       }
       setError(null)
-
-      const contentResponse = await fetch('/api/user-database/content/get', {
+      
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      // Fetch content data
+      const contentResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          sortBy: sortBy
+            sortBy: sortBy
+          })
         })
-      })
+
 
       if (!contentResponse.ok) {
         const errorData = await contentResponse.json()
