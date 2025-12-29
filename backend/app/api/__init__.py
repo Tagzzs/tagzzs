@@ -13,6 +13,7 @@ from .chat import router as chat_router
 from .ollama import router as ollama_router
 from .search import router as search_router
 from .auth.auth_routes import router as auth_router
+from .user_database.content.create import router as content_router
 
 __all__ = [
     "extract_router",
@@ -23,5 +24,6 @@ __all__ = [
     "chat_router",
     "ollama_router",
     "search_router",
-    "auth_router"
+    "auth_router",
+    "content_router"
 ]

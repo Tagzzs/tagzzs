@@ -16,7 +16,6 @@ async def get_current_user(request: Request) -> Dict[str, Any]:
     """
 
     auth_header = request.headers.get("Authorization")
-    print(auth_header)
     if not auth_header or not auth_header.startswith("Bearer "):
         raise Exception("Authentication required")
 

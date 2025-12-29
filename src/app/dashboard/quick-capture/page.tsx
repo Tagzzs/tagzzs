@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X, LinkIcon, Upload, Sparkles, Check, Loader2, Image as ImageIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { marked } from 'marked'
+import { createClient } from '@/utils/supabase/client'
 
 // Configure marked for safe HTML output
 marked.setOptions({
@@ -280,10 +281,15 @@ export default function AddContentPage() {
         thumbnailUrl: contentData.thumbnailUrl || 'Not provided',
       })
 
-      const contentResponse = await fetch('/api/user-database/content/add', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const contentResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/add`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(contentData)
       });

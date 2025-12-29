@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, status
 from app.api.auth.schemas import SignUpRequest, SignInRequest
 from app.api.auth.supabase_client import get_supabase
-from app.services.firebase_user_service import FirebaseUserService
+from app.services.firebase.firebase_user_service import FirebaseUserService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
