@@ -14,6 +14,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { marked } from 'marked'
 import Image from "next/image"
+import { createClient } from '@/utils/supabase/client'
+
 
 // Configure marked for safe HTML output
 marked.setOptions({
@@ -275,12 +277,17 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
     try {
       setIsDeleting(true)
+
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
       
       // Make API call to delete content
-      const response = await fetch('/api/user-database/content/delete', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/delete`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           contentId: contentItem.id

@@ -5,13 +5,12 @@ import httpx
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, List
-from fastapi import APIRouter, Request
+from typing import Optional, List, Dict, Any, Union
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from pydantic import BaseModel, Field, HttpUrl
-
-from fastapi import APIRouter, Request, Depends
+from supabase import create_client, Client
 
 # Internal imports 
 from app.services.firebase.firebase_admin_setup import admin_db
@@ -33,6 +32,33 @@ class AddContentSchema(BaseModel):
     thumbnailUrl: Optional[str] = None
     rawContent: str = ''
 
+
+class EmbeddingMetadata(BaseModel):
+    chromaDocIds: Optional[List[str]] = None
+    summaryDocId: Optional[str] = None
+    chunkCount: Optional[int] = None
+
+
+class ContentDataSchema(BaseModel):
+    createdAt: str
+    tagsId: List[str]
+    link: str
+    title: str
+    description: str
+    contentType: str
+    contentSource: str
+    personalNotes: str
+    readTime: str
+    updatedAt: str
+    thumbnailUrl: Optional[str] = None 
+    rawContent: Optional[str] = None
+    embeddingMetadata: Optional[EmbeddingMetadata] = None
+
+
+    class Config:
+        populate_by_name = True
+
+
 router = APIRouter(prefix="/api/user-database/content", tags=["Content Management"])
 
 
@@ -46,7 +72,7 @@ async def add_content(req: Request):
         try:
             user = await get_current_user(req)
         except Exception as e:
-            return create_auth_error(status_code=401, message="Authentication required to add content")
+            return create_auth_error(message="Authentication required to add content") # Status code parameter was redundant
 
         user_id = user["id"]
 
@@ -214,3 +240,124 @@ async def add_content(req: Request):
             "success": False,
             "error": {"code": 'INTERNAL_ERROR', "message": 'An unexpected error occurred while adding content', "details": 'Please try again later'}
         })   
+
+
+@router.delete("/delete")
+async def delete_content(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        if not user:
+            return create_auth_error('Authentication required to delete content')
+
+        user_id = user.get("id")
+
+        # Get the request body
+        body = await request.json()
+        content_id: Optional[str] = body.get("contentId")
+
+        if not content_id:
+            return JSONResponse(
+                content={'error': 'Content ID is required'},
+                status_code=400
+            )
+
+        # Check if user exists in Firebase
+        user_ref = admin_db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+
+        if not user_doc.exists:
+            return JSONResponse(
+                content={'error': 'User not found'},
+                status_code=404
+            )
+
+        # If content_id is provided, delete specific content
+        if content_id:
+            content_ref = user_ref.collection('content').document(content_id)
+
+            # Check if content exists and get its data
+            content_doc = content_ref.get()
+            if not content_doc.exists:
+                return JSONResponse(
+                    content={'error': 'Content not found'},
+                    status_code=404
+                )
+
+            try:
+                raw_data = content_doc.to_dict()
+                content_data = ContentDataSchema.model_validate(raw_data)
+            except Exception as val_error:
+                print(f"Validation Error: {val_error}")
+                return JSONResponse(content={'error': 'Stored content data is invalid'}, status_code=500)
+
+            # Delete thumbnail from Supabase Storage if it exists
+            thumbnail_url = content_data.thumbnailUrl
+            if thumbnail_url:
+                try:
+                    supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+                    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+                    if supabase_url and supabase_key:
+                        supabase: Client = create_client(supabase_url, supabase_key)
+
+                        # Extract the file name from the thumbnail URL
+                        url_parts = thumbnail_url.split('/')
+                        file_name = url_parts[-1]
+
+                        if file_name:
+                            supabase.storage.from_('user_thumbnails').remove([file_name])
+                
+                except Exception as storage_error:
+                    print(f'Warning: Error deleting thumbnail: {storage_error}')
+                    # content will still be deleted from database
+
+            # Delete the content document
+            content_ref.delete()
+
+            # Update user's totalContent count
+            try:
+                await FirebaseUserService.update_content_count(user_id, -1)
+            except Exception:
+                pass
+
+            # Update tag counts if content had tags
+            tags_id = content_data.tagsId
+            if tags_id and len(tags_id) > 0:
+                await update_multiple_tag_counts(user_id, tags_id)
+
+            return JSONResponse(
+                content={
+                    'success': True,
+                    'message': 'Content deleted successfully',
+                    'contentId': content_id,
+                    'userId': user_id
+                },
+                status_code=200
+            )
+        
+        else:
+            content_collection = user_ref.collection('content')
+            
+            content_snapshot = content_collection.get()
+            batch = admin_db.batch()
+            for doc in content_snapshot:
+                batch.delete(doc.reference)
+            batch.delete(user_ref)
+            batch.commit()
+
+            return JSONResponse(
+                content={
+                    'success': True,
+                    'message': 'User and all associated content deleted successfully',
+                    'userId': user_id,
+                    'deletedContentCount': len(content_snapshot)
+                },
+                status_code=200
+            )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            content={'error': 'Internal server error'},
+            status_code=500
+        )
