@@ -4,53 +4,61 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ChevronDown, Send, Loader2, Check, Sparkles, ChevronUp, Zap, Book } from "lucide-react";
+import { ChevronDown, Send, Loader2, Sparkles, ChevronUp, Book, Globe, Database, MessageSquare } from "lucide-react";
 
-// Types
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  taskType?: string;
-  confidence?: number;
   executionTime?: number;
-  executionSteps?: Array<{ step?: string; step_name?: string; status: string; timestamp?: string }>;
+  executionSteps?: Array<{ step?: string | number; step_name?: string; status: string }>;
+  uiComponent?: {
+    type: string;
+    action?: string;
+    query?: string;
+    button_text?: string;
+  };
+  referencedContent?: ContentReference[];
 }
 
-interface TaskType {
+interface ContentReference {
+  content_id: string;
+  title: string;
+  source_url?: string;
+  content_type?: string;
+}
+
+interface Source {
   type: string;
-  name: string;
-  description: string;
+  query: string;
 }
 
 interface AgentResponse {
   success: boolean;
-  task_type?: string;
-  task_confidence?: number;
   answer?: string;
-  confidence_score?: number;
+  status?: string;
+  sources_used?: Source[];
+  referenced_content?: ContentReference[];
   execution_time_ms?: number;
-  execution_steps?: Array<{ step_name: string; status: string }>;
+  execution_steps?: Array<{ step_name: string; status: string; step?: number }>;
+  ui_component?: {
+    type: string;
+    action?: string;
+    query?: string;
+    button_text?: string;
+  };
   error?: string;
 }
 
 interface HealthStatus {
   status: "healthy" | "degraded" | "unhealthy";
-  available_tasks: number;
+  agent_model?: string;
   active_services: Record<string, boolean>;
 }
 
-// API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-// Example queries for quick access
 const EXAMPLE_QUERIES = [
   "Tell me a summary of the content",
   "What are the key insights?",
@@ -78,38 +86,19 @@ export default function KaiAIChat() {
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [pastChats, setPastChats] = useState<Array<{ chatId: string; title: string; messageCount: number; createdAt: number; updatedAt: number; preview: string }>>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<string | null>(null);
-  const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
-  const [isTaskDropdownOpen, setIsTaskDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Fetch available tasks and health on mount
   useEffect(() => {
-    fetchTasks();
     checkHealth();
-    // initialize conversation id
     const id = `chat_${uuidv4()}`;
     setConversationId(id);
   }, []);
-
-  const fetchTasks = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/ai-agent/tasks`);
-      if (response.ok) {
-        const data = await response.json();
-        setTaskTypes(data.tasks || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch tasks:", error);
-    }
-  };
 
   const checkHealth = async () => {
     try {
@@ -147,13 +136,12 @@ export default function KaiAIChat() {
         query: query,
         user_id: userId,
         conversation_history: messages
-          .filter((m) => m.role === "user" || (m.role === "assistant" && m.taskType))
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .slice(-10)
           .map((m) => ({
             role: m.role,
             content: m.content,
           })),
-        content_id_filter: null,
-        task_type: selectedTask || undefined,
       };
 
       const response = await fetch(`${API_BASE_URL}/ai-agent/query`, {
@@ -173,15 +161,13 @@ export default function KaiAIChat() {
           role: "assistant",
           content: data.answer,
           timestamp: new Date(),
-          taskType: data.task_type,
-          confidence: data.confidence_score,
           executionTime: data.execution_time_ms,
           executionSteps: data.execution_steps,
+          referencedContent: data.referenced_content,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
 
-        // Update conversation history and save
         const userContent = query;
         const assistantContent = data.answer as string;
         setConversationHistory((prev) => {
@@ -191,11 +177,19 @@ export default function KaiAIChat() {
             { role: 'assistant', content: assistantContent },
           ];
 
-          // Save to backend
           saveConversationToFirebase(conversationId, updated);
 
           return updated;
         });
+      } else if (data.status === "needs_permission" && data.ui_component) {
+        const permissionMessage: Message = {
+          id: `msg_${Date.now()}`,
+          role: "assistant",
+          content: data.answer || "I need permission to continue.",
+          timestamp: new Date(),
+          uiComponent: data.ui_component,
+        };
+        setMessages((prev) => [...prev, permissionMessage]);
       } else {
         const errorMessage: Message = {
           id: `msg_${Date.now()}`,
@@ -220,7 +214,6 @@ export default function KaiAIChat() {
     }
   };
 
-  // Save conversation to backend (create or update)
   const saveConversationToFirebase = async (chatId: string, history: Array<{ role: string; content: string }>, title?: string) => {
     if (!chatId || history.length === 0) return;
 
@@ -247,7 +240,6 @@ export default function KaiAIChat() {
     }
   };
 
-  // Load past chats list
   const loadChatHistory = async () => {
     try {
       setIsLoadingHistory(true);
@@ -265,7 +257,6 @@ export default function KaiAIChat() {
     }
   };
 
-  // Load a specific past chat into the view
   const loadPastChat = async (chatId: string) => {
     try {
       const res = await fetch(`/api/user-database/ai-chats/get?chatId=${chatId}`);
@@ -275,7 +266,6 @@ export default function KaiAIChat() {
         setConversationId(chatId);
         setConversationHistory(chat.messages || []);
 
-        // Build display messages
         const display: Message[] = [
           {
             id: 'welcome',
@@ -301,7 +291,6 @@ export default function KaiAIChat() {
     }
   };
 
-  // Delete past chat
   const deletePastChat = async (chatId: string) => {
     if (!confirm('Delete this chat?')) return;
     try {
@@ -337,50 +326,28 @@ export default function KaiAIChat() {
     setInput(query);
   };
 
-  const selectTask = (taskName: string) => {
-    setSelectedTask(selectedTask === taskName ? null : taskName);
-    setIsTaskDropdownOpen(false);
-  };
-
   const formatStepName = (stepName: string): string => {
     const steps: Record<string, string> = {
-      "TaskRouter": "Analyzing task type",
-      "task_router": "Analyzing task type",
-      "ContentRetrieval": "Retrieving relevant content",
-      "content_retrieval": "Retrieving relevant content",
-      "ContentSearch": "Searching content database",
-      "content_search": "Searching content database",
-      "SummaryGeneration": "Generating summary",
-      "summary_generation": "Generating summary",
+      // ReAct agent steps
+      "web_search": "Searching the web",
+      "search_knowledge_base": "Searching your content",
+      "ask_user_permission": "Requesting permission",
+      "final_answer": "Generating response",
+      // Legacy steps
+      "TaskRouter": "Analyzing request",
+      "ContentRetrieval": "Retrieving content",
       "ResponseGeneration": "Generating response",
-      "response_generation": "Generating response",
       "Validation": "Validating response",
-      "validation": "Validating response",
-      "ContextBuilding": "Building context",
-      "context_building": "Building context",
-      "MetadataFiltering": "Filtering by metadata",
-      "metadata_filtering": "Filtering by metadata",
-      "DataAggregation": "Aggregating data",
-      "data_aggregation": "Aggregating data",
-      "Analysis": "Analyzing patterns",
-      "analysis": "Analyzing patterns",
-      "Comparison": "Comparing results",
-      "comparison": "Comparing results",
     };
-    const defaultName = stepName ? stepName.replace(/_/g, " ") : "Unknown step";
-    return steps[stepName || ""] || defaultName;
+    const defaultName = stepName ? stepName.replace(/_/g, " ") : "Processing";
+    return steps[stepName || ""] || defaultName.charAt(0).toUpperCase() + defaultName.slice(1);
   };
 
-  const getTaskColor = (taskType?: string) => {
-    const colors: Record<string, string> = {
-      SEARCH: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700",
-      SUMMARIZE: "bg-green-500/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700",
-      ANALYZE: "bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700",
-      COMPARE: "bg-orange-500/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-700",
-      EXTRACT_INSIGHTS: "bg-red-500/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700",
-      METADATA_QUERY: "bg-pink-500/20 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-700",
-    };
-    return colors[taskType || "SEARCH"] || "bg-gray-500/20 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700";
+  const getStepIcon = (stepName: string) => {
+    if (stepName === "web_search") return <Globe className="w-3 h-3" />;
+    if (stepName === "search_knowledge_base") return <Database className="w-3 h-3" />;
+    if (stepName === "final_answer") return <MessageSquare className="w-3 h-3" />;
+    return <Sparkles className="w-3 h-3" />;
   };
 
   return (
@@ -400,45 +367,6 @@ export default function KaiAIChat() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {/* Task Selector Dropdown */}
-            <DropdownMenu open={isTaskDropdownOpen} onOpenChange={setIsTaskDropdownOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 text-xs"
-                  disabled={taskTypes.length === 0}
-                >
-                  <Zap className="w-4 h-4" />
-                  {selectedTask ? selectedTask.replace(/_/g, " ") : "Task"}
-                  <ChevronDown className="w-3 h-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {taskTypes.map((task) => (
-                  <DropdownMenuItem
-                    key={task.type}
-                    onClick={() => selectTask(task.type)}
-                    className={`cursor-pointer ${selectedTask === task.type ? "bg-blue-500/20" : ""}`}
-                  >
-                    <div className="flex items-start gap-2 w-full">
-                      <div className="mt-1">
-                        {selectedTask === task.type ? (
-                          <Check className="w-4 h-4 text-blue-600" />
-                        ) : (
-                          <div className="w-4 h-4" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{task.type.replace(/_/g, " ")}</p>
-                        <p className="text-xs text-muted-foreground">{task.description}</p>
-                      </div>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
             {/* Health Status */}
             {healthStatus && (
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
@@ -536,18 +464,47 @@ export default function KaiAIChat() {
                   <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
                 </div>
 
+                {/* Permission Button */}
+                {message.uiComponent && message.uiComponent.type === "permission_button" && (
+                  <div className="mt-3">
+                    <Button
+                      onClick={() => {
+                        // Re-trigger the query with permission granted
+                        setInput(message.uiComponent?.query || "");
+                        // Remove the permission message and auto-submit
+                        setMessages((prev) => prev.filter((m) => m.id !== message.id));
+                        // Trigger search automatically
+                        setTimeout(() => {
+                          const form = document.querySelector('form');
+                          if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
+                        }, 100);
+                      }}
+                      className="gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                    >
+                      <Globe className="w-4 h-4" />
+                      {message.uiComponent.button_text || "Allow Web Search"}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Referenced Content Boxes - Clickable links to saved content */}
+                {message.referencedContent && message.referencedContent.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center justify-start gap-2">
+                    <span className="text-xs text-muted-foreground mr-1">Sources:</span>
+                    {message.referencedContent.map((ref, idx) => (
+                      <a
+                        key={idx}
+                        href={`/dashboard/content/${ref.content_id}`}
+                        className="inline-flex items-center gap-1 px-1 py rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[10px] font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                      >
+                        {ref.title}
+                      </a>
+                    ))}
+                  </div>
+                )}
+
                 {message.role === "assistant" && (
                   <div className="flex flex-wrap gap-2 items-center">
-                    {message.taskType && (
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTaskColor(message.taskType)}`}>
-                        {message.taskType.replace(/_/g, " ")}
-                      </span>
-                    )}
-                    {message.confidence !== undefined && (
-                      <span className="text-xs text-muted-foreground">
-                        📊 {Math.round(message.confidence * 100)}%
-                      </span>
-                    )}
                     {message.executionTime !== undefined && (
                       <span className="text-xs text-muted-foreground">
                         ⏱ {message.executionTime}ms
@@ -583,7 +540,7 @@ export default function KaiAIChat() {
                     </p>
                     <div className="space-y-2">
                       {message.executionSteps.map((step, idx) => {
-                        const stepName = step.step || step.step_name || "";
+                        const stepName = String(step.step_name || step.step || "");
                         const display = formatStepName(stepName);
                         const isCompleted = step.status === "completed";
                         
@@ -737,11 +694,6 @@ export default function KaiAIChat() {
           {/* Status Messages */}
           {!user && (
             <p className="text-xs text-destructive">Please sign in to use Kai AI</p>
-          )}
-          {selectedTask && (
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              📌 Task filter active: <span className="font-medium">{selectedTask.replace(/_/g, " ")}</span>
-            </p>
           )}
         </form>
       </div>

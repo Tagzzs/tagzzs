@@ -9,12 +9,13 @@ Provides FastAPI endpoints for:
 """
 
 import logging
+import time
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, status, Header
 
-from app.agents.agentic_service import AgenticAIService
+from app.services.ai.react_agent import ReActAgent
 
 logger = logging.getLogger(__name__)
 
@@ -64,14 +65,7 @@ class AgentQueryRequest(BaseModel):
     conversation_history: Optional[List[Dict[str, str]]] = Field(
         default=None, description="Optional conversation history for context"
     )
-    content_id_filter: Optional[str] = Field(
-        default=None,
-        description="Optional filter to limit search to specific content_id",
-    )
-    task_type: Optional[str] = Field(
-        default=None,
-        description="Optional task type filter to constrain agent behavior",
-    )
+
     user_id: Optional[str] = Field(
         default="guest", description="User ID for tracking and personalization"
     )
@@ -82,39 +76,27 @@ class AgentQueryRequest(BaseModel):
                 "query": "What is the latest on AI?",
                 "user_id": "user123",
                 "conversation_history": [],
-                "content_id_filter": None,
-                "task_type": "SEARCH",
             }
         }
-
-
-class ExecutionStep(BaseModel):
-    """Model for a single execution step"""
-
-    step_name: str = Field(..., description="Name of the execution step")
-    status: str = Field(
-        ..., description="Status: completed, failed, skipped, in_progress"
-    )
-    timestamp: Optional[datetime] = Field(None, description="When step executed")
 
 
 class AgentQueryResponse(BaseModel):
     """Response model for agent query endpoint"""
 
     success: bool = Field(..., description="Whether query was successful")
-    task_type: Optional[str] = Field(default=None, description="Classified task type")
-    task_confidence: Optional[float] = Field(
-        default=None, description="Confidence in task classification (0-1)"
-    )
     query: str = Field(..., description="Original user query")
     answer: Optional[str] = Field(
         default=None, description="Generated answer or response"
     )
-    sources_used: Optional[List[Dict[str, Any]]] = Field(
-        default=None, description="Sources used in response"
+    status: str = Field(
+        default="completed", description="Status: completed, needs_permission, error"
     )
-    confidence_score: Optional[float] = Field(
-        default=None, description="Confidence in answer quality (0-1)"
+
+    sources_used: List[Dict[str, str]] = Field(
+        default_factory=list, description="Sources used in response"
+    )
+    referenced_content: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Content items referenced (for clickable UI boxes)"
     )
     execution_time_ms: int = Field(
         ..., description="Total execution time in milliseconds"
@@ -128,19 +110,15 @@ class AgentQueryResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "success": True,
-                "task_type": "SEARCH",
-                "task_confidence": 0.85,
                 "query": "What is Python?",
                 "answer": "Python is a high-level programming language...",
-                "confidence_score": 0.72,
+                "status": "completed",
+                "sources_used": [{"type": "web_search", "query": "Python"}],
                 "execution_time_ms": 1250,
                 "execution_steps": [
-                    {"step_name": "TaskRouter", "status": "completed"},
-                    {"step_name": "ContentRetrieval", "status": "completed"},
-                    {"step_name": "ResponseGeneration", "status": "completed"},
-                    {"step_name": "Validation", "status": "completed"},
+                    {"step": 1, "action": "web_search", "input": "Python"},
+                    {"step": 2, "action": "final_answer", "input": "Python is..."},
                 ],
-                "sources_used": [],
             }
         }
 
@@ -157,18 +135,10 @@ class AgentChatRequest(BaseModel):
     conversation_id: str = Field(
         ..., description="Conversation ID for tracking context"
     )
-    user_id: Optional[str] = Field(default="guest", description="User ID")
-    content_id_filter: Optional[str] = Field(
-        None, description="Optional content filter"
+    conversation_history: Optional[List[Dict[str, str]]] = Field(
+        default=None, description="Previous messages for context"
     )
-
-
-class ChatMessage(BaseModel):
-    """Model for a chat message"""
-
-    role: str = Field(..., description="Role: 'user' or 'assistant'")
-    content: str = Field(..., description="Message content")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    user_id: Optional[str] = Field(default="guest", description="User ID")
 
 
 class AgentChatResponse(BaseModel):
@@ -177,9 +147,11 @@ class AgentChatResponse(BaseModel):
     success: bool = Field(..., description="Whether request was successful")
     conversation_id: str = Field(..., description="Conversation ID")
     message: str = Field(..., description="Assistant response")
-    task_type: Optional[str] = Field(default=None, description="Classified task type")
-    confidence_score: Optional[float] = Field(
-        default=None, description="Answer confidence (0-1)"
+    status: str = Field(
+        default="completed", description="Status: completed, needs_permission, error"
+    )
+    sources_used: List[Dict[str, str]] = Field(
+        default_factory=list, description="Sources used"
     )
     execution_time_ms: int = Field(..., description="Execution time in milliseconds")
     error: Optional[str] = Field(default=None, description="Error message if failed")
@@ -192,23 +164,22 @@ class HealthResponse(BaseModel):
         ..., description="Service status: 'healthy', 'degraded', 'unhealthy'"
     )
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    available_tasks: int = Field(..., description="Number of available task types")
+    agent_model: str = Field(..., description="LLM model used by agent")
     active_services: Dict[str, bool] = Field(..., description="Status of each service")
 
 
 class TaskInfo(BaseModel):
     """Model for task type information"""
 
-    type: str = Field(..., description="Task type identifier")
-    name: str = Field(..., description="Human-readable task name")
-    description: str = Field(..., description="Task description")
+    name: str = Field(..., description="Tool name")
+    description: str = Field(..., description="Tool description")
 
 
 class TaskListResponse(BaseModel):
-    """Response model for listing available tasks"""
+    """Response model for listing available tools"""
 
-    available_tasks: int = Field(..., description="Number of available task types")
-    tasks: List[TaskInfo] = Field(..., description="List of available tasks")
+    available_tools: int = Field(..., description="Number of available tools")
+    tools: List[TaskInfo] = Field(..., description="List of available tools")
 
 
 # ============================================================================
@@ -221,65 +192,71 @@ class TaskListResponse(BaseModel):
     response_model=AgentQueryResponse,
     status_code=status.HTTP_200_OK,
     summary="Execute Agent Query",
-    description="Submit a query to the AI agent for processing.",
+    description="Submit a query to the async ReAct AI agent for processing.",
 )
 async def query_agent(
     request: AgentQueryRequest, x_user_id: Optional[str] = Header(None)
 ) -> AgentQueryResponse:
-    """Execute a single query through the AI agent system."""
+    """
+    Execute a single query through the async ReAct agent.
+    
+    Features:
+    - Async web search via DuckDuckGo
+    - Knowledge base search via ChromaDB
+    - 5-step reasoning loop with automatic termination
+    """
+    start_time = time.time()
+    
     try:
         user_id = validate_user_authentication(x_user_id, request.user_id)
 
-        service = AgenticAIService(user_id)
-        logger.info(
-            f"🟡 [QUERY_AGENT] AgenticAIService initialized for user: {user_id}"
+        logger.info(f"🟡 [QUERY_AGENT] Starting ReAct agent for user: {user_id}")
+        logger.info(f"� [QUERY_AGENT] Query: {request.query[:100]}...")
+
+        # Create and run the ReAct agent
+        agent = ReActAgent(user_id)
+        response = await agent.run(
+            user_query=request.query,
+            conversation_history=request.conversation_history or []
         )
 
-        result = service.execute_agent(
-            query=request.query,
-            conversation_history=request.conversation_history or [],
-            content_id_filter=request.content_id_filter,
-            task_type=request.task_type,
-        )
+        execution_time = int((time.time() - start_time) * 1000)
+        logger.info(f"✅ [QUERY_AGENT] Agent completed with status: {response.status}")
 
-        logger.info(
-            f"🟡 [QUERY_AGENT] Agent execution result - Success: {result.get('success')}"
-        )
-
-        if not result["success"]:
-            logger.warning(f"🔴 [QUERY_AGENT] Query failed: {result.get('error')}")
-            return AgentQueryResponse(
-                success=False,
-                query=request.query,
-                answer=None,
-                execution_time_ms=result.get("execution_time_ms", 0),
-                error=result.get("error", "Unknown error"),
-            )
-
-        logger.info(
-            f"✅ [QUERY_AGENT] Query processed successfully. Task: {result.get('task_type')}"
-        )
+        # Format execution steps for frontend compatibility
+        # Frontend expects: [{step_name: "...", status: "completed"}, ...]
+        execution_trace = agent.get_execution_trace()
+        formatted_steps = [
+            {
+                "step_name": step.get("action", "unknown"),
+                "status": "completed",
+                "step": step.get("step", idx + 1),
+            }
+            for idx, step in enumerate(execution_trace)
+        ]
 
         return AgentQueryResponse(
-            success=True,
-            task_type=result.get("task_type"),
-            task_confidence=result.get("task_confidence"),
+            success=response.status == "completed",
             query=request.query,
-            answer=result.get("final_answer"),
-            sources_used=result.get("sources_used"),
-            confidence_score=result.get("confidence_score"),
-            execution_time_ms=result.get("execution_time_ms", 0),
-            execution_steps=result.get("execution_steps", []),
-            error=None,
+            answer=response.response_text,
+            status=response.status,
+
+            sources_used=response.sources,
+            referenced_content=response.referenced_content,
+            execution_time_ms=execution_time,
+            execution_steps=formatted_steps,
+            error=None if response.status == "completed" else response.response_text,
         )
 
     except ValueError as ve:
+        execution_time = int((time.time() - start_time) * 1000)
         logger.error(f"🔴 [QUERY_AGENT] Validation error: {str(ve)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid request: {str(ve)}",
         )
     except Exception as e:
+        execution_time = int((time.time() - start_time) * 1000)
         logger.error(f"🔴 [QUERY_AGENT] Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -292,12 +269,22 @@ async def query_agent(
     response_model=AgentChatResponse,
     status_code=status.HTTP_200_OK,
     summary="Multi-Turn Conversation",
-    description="Engage in multi-turn conversation with the AI agent.",
+    description="Engage in multi-turn conversation with the async ReAct AI agent.",
 )
 async def chat_with_agent(
     request: AgentChatRequest, x_user_id: Optional[str] = Header(None)
 ) -> AgentChatResponse:
-    """Engage in a multi-turn conversation with the AI agent."""
+    """
+    Engage in a multi-turn conversation with the async ReAct agent.
+    
+    Features:
+    - Async web search via DuckDuckGo
+    - Knowledge base search via ChromaDB
+    - Conversation history support
+    - 5-step reasoning loop
+    """
+    start_time = time.time()
+    
     try:
         user_id = validate_user_authentication(x_user_id, request.user_id)
 
@@ -305,42 +292,47 @@ async def chat_with_agent(
             f"🟡 [CHAT_AGENT] Chat message from user {user_id} in conv {request.conversation_id}"
         )
 
-        service = AgenticAIService(user_id)
-
-        result = service.execute_agent(
-            query=request.message,
-            conversation_history=[],
-            content_id_filter=request.content_id_filter,
+        # Create and run the ReAct agent
+        agent = ReActAgent(user_id)
+        response = await agent.run(
+            user_query=request.message,
+            conversation_history=request.conversation_history or []
         )
 
-        if not result["success"]:
-            logger.warning(f"Chat processing failed: {result.get('error')}")
+        execution_time = int((time.time() - start_time) * 1000)
+
+        if response.status != "completed":
+            logger.warning(f"Chat processing issue: {response.status}")
             return AgentChatResponse(
                 success=False,
                 conversation_id=request.conversation_id,
-                message="I encountered an error processing your message. Please try again.",
-                error=result.get("error"),
-                execution_time_ms=result.get("execution_time_ms", 0),
+                message=response.response_text,
+                status=response.status,
+                sources_used=response.sources,
+                execution_time_ms=execution_time,
+                error=response.response_text,
             )
 
-        logger.info(f"Chat processed. Task: {result.get('task_type')}")
+        logger.info(f"✅ [CHAT_AGENT] Chat processed successfully")
 
         return AgentChatResponse(
             success=True,
             conversation_id=request.conversation_id,
-            message=result.get("final_answer", ""),
-            task_type=result.get("task_type"),
-            confidence_score=result.get("confidence_score"),
-            execution_time_ms=result.get("execution_time_ms", 0),
+            message=response.response_text,
+            status=response.status,
+            sources_used=response.sources,
+            execution_time_ms=execution_time,
         )
 
     except ValueError as ve:
+        execution_time = int((time.time() - start_time) * 1000)
         logger.error(f"Validation error: {str(ve)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid request: {str(ve)}",
         )
     except Exception as e:
+        execution_time = int((time.time() - start_time) * 1000)
         logger.error(f"Unexpected error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -358,20 +350,14 @@ async def chat_with_agent(
 async def health_check() -> HealthResponse:
     """Get health status of the AI agent service."""
     try:
-        service = AgenticAIService("health_check")
-        stats = service.get_service_stats()
-
-        status_code = "healthy"
-
         return HealthResponse(
-            status=status_code,
+            status="healthy",
             timestamp=datetime.utcnow(),
-            available_tasks=stats.get("available_tasks", 0),
+            agent_model=ReActAgent.MODEL,
             active_services={
+                "groq": True,
+                "duckduckgo": True,
                 "chroma": True,
-                "embedding": True,
-                "llm": True,
-                "orchestrator": True,
             },
         )
 
@@ -387,30 +373,34 @@ async def health_check() -> HealthResponse:
     "/tasks",
     response_model=TaskListResponse,
     status_code=status.HTTP_200_OK,
-    summary="List Available Tasks",
-    description="Get list of available task types.",
+    summary="List Available Tools",
+    description="Get list of available tools the agent can use.",
 )
 async def list_tasks() -> TaskListResponse:
-    """List all available task types that the agent can handle."""
+    """List all available tools that the ReAct agent can use."""
     try:
-        service = AgenticAIService("task_list")
-        tasks_info = service.get_available_tasks()
+        from app.services.ai.tools import Tools
+        
+        tools = [
+            TaskInfo(
+                name="web_search",
+                description="Search the web using DuckDuckGo for real-time information",
+            ),
+            TaskInfo(
+                name="search_knowledge_base",
+                description="Search the user's saved content in ChromaDB",
+            ),
+            TaskInfo(
+                name="ask_user_permission",
+                description="Request permission from user for sensitive actions",
+            ),
+        ]
 
-        tasks = []
-        for task_info in tasks_info:
-            tasks.append(
-                TaskInfo(
-                    type=task_info["type"],
-                    name=task_info["type"].replace("_", " ").title(),
-                    description=task_info["description"],
-                )
-            )
-
-        return TaskListResponse(available_tasks=len(tasks), tasks=tasks)
+        return TaskListResponse(available_tools=len(tools), tools=tools)
 
     except Exception as e:
-        logger.error(f"Failed to list tasks: {str(e)}")
+        logger.error(f"Failed to list tools: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve task list",
+            detail="Failed to retrieve tool list",
         )
