@@ -16,8 +16,9 @@ async def get_current_user(request: Request) -> Dict[str, Any]:
     """
 
     auth_header = request.headers.get("Authorization")
+    print(auth_header)
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise Exception("Authentication required")
 
     token = auth_header.split(" ")[1]
 
@@ -36,6 +37,6 @@ async def get_current_user(request: Request) -> Dict[str, Any]:
             "role": payload.get("role")
         }
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
+        raise Exception("Token has expired")
     except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+        raise Exception(f"Invalid token: {str(e)}")
