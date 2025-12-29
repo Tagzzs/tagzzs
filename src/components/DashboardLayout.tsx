@@ -60,9 +60,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}`},
             body: JSON.stringify({}), 
           }),
-          fetch("/api/user-database/tags/get", {
+          fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({}),
           }),
         ]);

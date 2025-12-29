@@ -502,10 +502,11 @@ export default function LibraryPage() {
       }
 
       // Fetch tags data for tag names and colors
-      const tagsResponse = await fetch('/api/user-database/tags/get', {
+      const tagsResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({})
       })

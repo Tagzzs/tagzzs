@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plus, Edit, Trash2, Tag, Search, MoreHorizontal, AlertCircle } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/utils/supabase/client"
 
 interface TagItem {
   id: string;
@@ -71,10 +72,15 @@ export default function TagsPage() {
       }
       setError(null)
 
-      const response = await fetch('/api/user-database/tags/get', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({})
       })
@@ -116,10 +122,15 @@ export default function TagsPage() {
     try {
       setIsCreating(true)
 
-      const response = await fetch('/api/user-database/tags/add', {
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/add`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           tagName: newTag.tagName.trim(),
@@ -166,10 +177,15 @@ export default function TagsPage() {
     try {
       setIsUpdating(true)
 
-      const response = await fetch('/api/user-database/tags/edit', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/edit`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           tagId: editingTag.id,
@@ -206,10 +222,15 @@ export default function TagsPage() {
     try {
       setIsDeleting(tag.id)
       
-      const response = await fetch('/api/user-database/tags/delete', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/delete`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           tagId: tag.id

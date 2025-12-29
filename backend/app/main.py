@@ -19,7 +19,8 @@ from app.api import (
     chat_router,
     search_router,
     auth_router,
-    content_router
+    content_router,
+    tags_router
 )
 
 load_environment()
@@ -51,6 +52,7 @@ app.include_router(chat_router)
 app.include_router(search_router)
 app.include_router(auth_router)
 app.include_router(content_router)
+app.include_router(tags_router)
 
 
 @app.get("/")

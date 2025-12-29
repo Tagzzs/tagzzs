@@ -394,7 +394,7 @@ async def delete_content(request: Request, user: Dict[str, Any] = Depends(get_cu
 async def update_content(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
     try:
         if not user:
-            return create_auth_error('Authentication required to delete content')
+            return create_auth_error('Authentication required to edit content')
         
         body_dict = await request.json()
         
@@ -524,7 +524,7 @@ async def update_content(request: Request, user: Dict[str, Any] = Depends(get_cu
 async def get_content(user_id: str = Query(...), content_id: str = Query(...), user: Dict[str, Any] = Depends(get_current_user)):
     try:
         if not user:
-            return create_auth_error('Authentication required to delete content')
+            return create_auth_error('Authentication required to edit content')
 
         # Check if user exists
         user_ref = admin_db.collection('users').document(user_id)
@@ -553,13 +553,10 @@ async def get_content(user_id: str = Query(...), content_id: str = Query(...), u
 
 
 @router.post("/get")
-async def get_user_content(
-    request: Request, 
-    user: dict = Depends(get_current_user)
-):
+async def get_user_content(request: Request, user: dict = Depends(get_current_user)):
     try:
         if not user:
-            return create_auth_error('Authentication required to delete content')
+            return create_auth_error('Authentication required to get content')
         
         user_id = user["id"]
         

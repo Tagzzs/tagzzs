@@ -189,11 +189,16 @@ export default function AddContentPage() {
     
     for (const tagName of tagNames) {
       try {
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+
         // First, try to find existing tag
-        const checkResponse = await fetch('/api/user-database/tags/get', {
+        const checkResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             tagName: tagName.trim()
@@ -211,10 +216,11 @@ export default function AddContentPage() {
         // If tag doesn't exist, create it
         const randomColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0').toUpperCase()}`;
         
-        const createResponse = await fetch('/api/user-database/tags/add', {
+        const createResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/add`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             tagName: tagName.trim(),

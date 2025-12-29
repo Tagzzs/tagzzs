@@ -115,10 +115,11 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
       // Fetch tag data if content has tags
       if (item.tagsId && item.tagsId.length > 0) {
-        const tagsResponse = await fetch('/api/user-database/tags/get', {
+        const tagsResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({})
         })
