@@ -1,17 +1,15 @@
 """
-Local Chroma Database Connection Manager with Multi-Database Support
+Chroma Cloud Connection Manager with Multi-Database Support
 
-Manages connections to local Chroma database with persistent storage:
+Manages connections to Chroma Cloud:
 1. Summaries Database - Stores summarized content embeddings
 2. Chunks Database - Stores chunked content embeddings
 
 Each database is isolated for better performance and organization.
-Data is persisted locally in .chroma_db directory.
 """
 
 import logging
 import os
-from pathlib import Path
 from typing import Optional, Literal
 import chromadb
 from chromadb.api import ClientAPI
@@ -20,19 +18,19 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-
 load_dotenv(".env.local")
 load_dotenv()
 
-CHROMA_DB_PATH = os.getenv(
-    "CHROMA_DB_PATH", os.path.join(os.path.dirname(__file__), ".chroma_db")
-)
-CHROMA_SUMMARIES_PATH = os.path.join(CHROMA_DB_PATH, "summaries")
-CHROMA_CHUNKS_PATH = os.path.join(CHROMA_DB_PATH, "chunks")
-Path(CHROMA_SUMMARIES_PATH).mkdir(parents=True, exist_ok=True)
-Path(CHROMA_CHUNKS_PATH).mkdir(parents=True, exist_ok=True)
+CHROMA_API_KEY_SUMMARIES = os.getenv("CHROMA_API_KEY_SUMMARIES")
+CHROMA_TENANT_SUMMARIES = os.getenv("CHROMA_TENANT_SUMMARIES")
+CHROMA_DATABASE_SUMMARIES = os.getenv("CHROMA_DATABASE_SUMMARIES")
 
-logger.info(f"📁 Chroma DB Path: {CHROMA_DB_PATH}")
+CHROMA_API_KEY_CHUNKS = os.getenv("CHROMA_API_KEY_CHUNKS")
+CHROMA_TENANT_CHUNKS = os.getenv("CHROMA_TENANT_CHUNKS")
+CHROMA_DATABASE_CHUNKS = os.getenv("CHROMA_DATABASE_CHUNKS")
+
+logger.info(f"📁 Chroma Cloud - Summaries DB: {CHROMA_DATABASE_SUMMARIES}")
+logger.info(f"📁 Chroma Cloud - Chunks DB: {CHROMA_DATABASE_CHUNKS}")
 
 _summaries_client: Optional[ClientAPI] = None
 _chunks_client: Optional[ClientAPI] = None
@@ -40,26 +38,27 @@ _chunks_client: Optional[ClientAPI] = None
 
 def get_summaries_client() -> ClientAPI:
     """
-    Get or initialize local Chroma client for summaries database.
-
-    Connects to summaries database with persistent local storage.
-    Data is stored in .chroma_db/summaries directory.
+    Get or initialize Chroma Cloud client for summaries database.
 
     Returns:
         Chroma ClientAPI instance connected to summaries database
 
     Raises:
-        Exception: If connection to local Chroma database fails
+        Exception: If connection to Chroma Cloud fails
     """
     global _summaries_client
 
     if _summaries_client is None:
         try:
             logger.info(
-                f"📦 Connecting to Local Chroma - Summaries DB (path: {CHROMA_SUMMARIES_PATH})"
+                f"☁️ Connecting to Chroma Cloud - Summaries DB ({CHROMA_DATABASE_SUMMARIES})"
             )
-            _summaries_client = chromadb.PersistentClient(path=CHROMA_SUMMARIES_PATH)
-            logger.info("✅ Connected to Local Chroma Summaries database successfully")
+            _summaries_client = chromadb.CloudClient(
+                tenant=CHROMA_TENANT_SUMMARIES,
+                database=CHROMA_DATABASE_SUMMARIES,
+                api_key=CHROMA_API_KEY_SUMMARIES,
+            )
+            logger.info("✅ Connected to Chroma Cloud Summaries database successfully")
 
         except Exception as e:
             logger.error(f"Failed to initialize Summaries Chroma client: {str(e)}")
@@ -70,27 +69,27 @@ def get_summaries_client() -> ClientAPI:
 
 def get_chunks_client() -> ClientAPI:
     """
-    Get or initialize local Chroma client for chunks database.
-
-    Connects to chunks database with persistent local storage.
-    Data is stored in .chroma_db/chunks directory.
+    Get or initialize Chroma Cloud client for chunks database.
 
     Returns:
         Chroma ClientAPI instance connected to chunks database
 
     Raises:
-        Exception: If connection to local Chroma database fails
+        Exception: If connection to Chroma Cloud fails
     """
     global _chunks_client
 
     if _chunks_client is None:
         try:
             logger.info(
-                f"📦 Connecting to Local Chroma - Chunks DB (path: {CHROMA_CHUNKS_PATH})"
+                f"☁️ Connecting to Chroma Cloud - Chunks DB ({CHROMA_DATABASE_CHUNKS})"
             )
-
-            _chunks_client = chromadb.PersistentClient(path=CHROMA_CHUNKS_PATH)
-            logger.info("✅ Connected to Local Chroma Chunks database successfully")
+            _chunks_client = chromadb.CloudClient(
+                tenant=CHROMA_TENANT_CHUNKS,
+                database=CHROMA_DATABASE_CHUNKS,
+                api_key=CHROMA_API_KEY_CHUNKS,
+            )
+            logger.info("✅ Connected to Chroma Cloud Chunks database successfully")
 
         except Exception as e:
             logger.error(f"Failed to initialize Chunks Chroma client: {str(e)}")
@@ -230,7 +229,7 @@ def reinitialize_clients():
     global _summaries_client, _chunks_client
     _summaries_client = None
     _chunks_client = None
-    logger.info("🔄 Chroma clients reinitialized")
+    logger.info("🔄 Chroma Cloud clients reinitialized")
     get_summaries_client()
     get_chunks_client()
 

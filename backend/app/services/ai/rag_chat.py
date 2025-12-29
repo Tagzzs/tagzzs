@@ -20,7 +20,7 @@ class ContextChunk:
     text: str
     score: float
     title: Optional[str] = None
-    created_at: Optional[str] = None  # new: ISO timestamp when content was saved
+    created_at: Optional[str] = None
 
 
 @dataclass
@@ -59,9 +59,7 @@ When you have saved content context:
 
 Tone: Friendly, informative, conversational, intelligent"""
 
-        self.MAX_EMBEDDING_LENGTH = 400  # Conservative limit for embedding model
-
-    # ... other methods unchanged (chat, etc.) ...
+        self.MAX_EMBEDDING_LENGTH = 400
 
     def _build_context_string(self, chunks: List[ContextChunk]) -> str:
         """
@@ -79,12 +77,10 @@ Tone: Friendly, informative, conversational, intelligent"""
             if hasattr(chunk, "created_at") and chunk.created_at:
                 created_at = chunk.created_at
             elif chunk.title and "created_at" in (chunk.title or ""):
-                # defensive fallback
                 created_at = chunk.title
 
             saved_str = ""
             if created_at:
-                # try to create a readable timestamp
                 try:
                     dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                     created_at_str = dt.strftime("%Y-%m-%d %H:%M UTC")
@@ -119,7 +115,6 @@ Tone: Friendly, informative, conversational, intelligent"""
         try:
             print("  [FETCH_CONTEXT] Starting context retrieval...")
 
-            # Generate query embedding
             print("  → Generating query embedding using sentence-transformers...")
             self.logger.info("[RAG_CHAT] Generating query embedding...")
             query_embedding = await self._generate_embedding(query)
@@ -128,15 +123,13 @@ Tone: Friendly, informative, conversational, intelligent"""
                 f"[RAG_CHAT] ✅ Generated embedding ({len(query_embedding)} dimensions)"
             )
 
-            # Get chunks collection from Chroma
             print("  → Connecting to Chroma Cloud...")
-            from chroma_connection import get_user_collection
+            from app.connections import get_user_collection
 
             collection = get_user_collection(user_id, "chunks")
             print(f"    ✅ Collection retrieved: user_{user_id}_chunks")
             self.logger.info(f"[RAG_CHAT] ✅ Got collection: user_{user_id}_chunks")
 
-            # Build search query
             print("  → Building Knn search query...")
             from chromadb import Search, K, Knn
 
@@ -147,7 +140,6 @@ Tone: Friendly, informative, conversational, intelligent"""
                 .select(K.DOCUMENT, K.SCORE, "content_id")
             )
 
-            # Add content filter if provided
             if content_id_filter:
                 search.where(K("content_id").eq(content_id_filter))
                 print(f"    ✅ Applied content_id filter: {content_id_filter}")
@@ -195,7 +187,6 @@ Tone: Friendly, informative, conversational, intelligent"""
                 self.logger.info(f"[RAG_CHAT] Processing {len(rows)} search results...")
 
                 for rank, row in enumerate(rows):
-                    # Handle both dict and object responses
                     if isinstance(row, dict):
                         metadata = row.get("metadata") or {}
                         score = row.get("score") or 0
@@ -211,7 +202,6 @@ Tone: Friendly, informative, conversational, intelligent"""
                         else getattr(metadata, "content_id", "")
                     )
 
-                    # Attempt to pull created_at from metadata (if present)
                     created_at = None
                     if isinstance(metadata, dict):
                         created_at = (
@@ -248,5 +238,3 @@ Tone: Friendly, informative, conversational, intelligent"""
                 f"[RAG_CHAT] Error in _execute_search: {str(e)}", exc_info=True
             )
             raise
-
-    # The rest of the file (chat method and others) remains unchanged.

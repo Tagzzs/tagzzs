@@ -13,6 +13,8 @@ from .semantic_enrichment import (
     get_semantic_service,
 )
 from .semantic_search import SemanticSearchService
+from .react_agent import ReActAgent, AgentResponse
+from .tools import Tools
 
 __all__ = [
     "OllamaAIService",
@@ -22,4 +24,7 @@ __all__ = [
     "QueryIntent",
     "SemanticSearchService",
     "get_semantic_service",
+    "ReActAgent",
+    "AgentResponse",
+    "Tools",
 ]

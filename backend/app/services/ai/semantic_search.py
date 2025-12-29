@@ -17,7 +17,7 @@ class SearchResult:
     content_id: str
     score: float
     rank: int
-    date: Optional[str] = None  # ISO timestamp if available (created_at)
+    date: Optional[str] = None
 
 
 class SemanticSearchService:
@@ -69,24 +69,20 @@ class SemanticSearchService:
                     f"[SEMANTIC_SEARCH] Content ID filter: {content_id_filter}"
                 )
 
-            # Step 1: Generate query embedding
             query_embedding = await self._generate_embedding(query)
             self.logger.info(
                 f"[SEMANTIC_SEARCH] ✅ Generated embedding ({len(query_embedding)} dimensions)"
             )
 
-            # Step 2: Get Chroma collection for summaries
-            from chroma_connection import get_user_collection
+            from app.connections import get_user_collection
 
             collection = get_user_collection(user_id, "summaries")
             self.logger.info(
                 f"[SEMANTIC_SEARCH] ✅ Got collection: user_{user_id}_summaries"
             )
 
-            # Step 3: Build where filter
             where_filter = self._build_where_filter(tags, content_id_filter)
 
-            # Step 4: Execute Chroma search and return results
             search_results = await self._search_chroma(
                 collection=collection,
                 query_embedding=query_embedding,
@@ -110,7 +106,6 @@ class SemanticSearchService:
         try:
             from app.services.refiners.embeddings.generator import EmbeddingGenerator
 
-            # Truncate to safe length
             max_length = 400
             truncated_query = query[:max_length] if len(query) > max_length else query
 
@@ -132,13 +127,10 @@ class SemanticSearchService:
         """Build Chroma where filter"""
         filters = []
 
-        # Add tag filter if provided
         if tags and len(tags) > 0:
             tag_filter = {"tags": {"$in": tags}}
             filters.append(tag_filter)
             self.logger.info(f"[SEMANTIC_SEARCH] Added tag filter: {tags}")
-
-        # Add content_id filter if provided
         if content_id_filter:
             content_filter = {"content_id": {"$eq": content_id_filter}}
             filters.append(content_filter)
@@ -146,7 +138,6 @@ class SemanticSearchService:
                 f"[SEMANTIC_SEARCH] Added content_id filter: {content_id_filter}"
             )
 
-        # Combine filters with $and if multiple
         if len(filters) == 0:
             return None
         elif len(filters) == 1:

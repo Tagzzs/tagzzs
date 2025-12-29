@@ -20,3 +20,5 @@ whisper
 pydub
 ffmpeg-python
 google-genai
+duckduckgo-search
+firebase-admin
