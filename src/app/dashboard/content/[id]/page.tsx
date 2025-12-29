@@ -15,7 +15,6 @@ import { useRouter } from "next/navigation"
 import { marked } from 'marked'
 import Image from "next/image"
 import { createClient } from '@/utils/supabase/client'
-import { createAuthError } from "@/utils/supabase/auth"
 
 
 // Configure marked for safe HTML output
@@ -241,7 +240,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       const token = session?.access_token
 
       if(!user) {
-        createAuthError("Authentication Error. Sign-in and try again.")
+        console.log("Authentication Error. Sign-in and try again.")
       }
             
       // Make API call to update content notes
