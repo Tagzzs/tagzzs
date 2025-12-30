@@ -20,7 +20,10 @@ from app.api import (
     search_router,
     auth_router,
     content_router,
-    tags_router
+    tags_router,
+    profile_router,
+    upload_router,
+    ai_chats_router
 )
 
 load_environment()
@@ -53,6 +56,9 @@ app.include_router(search_router)
 app.include_router(auth_router)
 app.include_router(content_router)
 app.include_router(tags_router)
+app.include_router(profile_router)
+app.include_router(upload_router)
+app.include_router(ai_chats_router)
 
 
 @app.get("/")

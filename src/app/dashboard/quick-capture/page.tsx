@@ -354,8 +354,13 @@ export default function AddContentPage() {
 
       setUploadProgress('Uploading file...')
 
-      const response = await fetch('/api/upload', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+        
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`, {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       })
 
@@ -411,8 +416,13 @@ export default function AddContentPage() {
 
       setThumbnailUploadProgress('Uploading thumbnail...')
 
-      const response = await fetch('/api/upload', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+        
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`, {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formDataPayload,
       })
 

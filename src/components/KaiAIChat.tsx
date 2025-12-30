@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Send, Loader2, Sparkles, ChevronUp, Book, Globe, Database, MessageSquare } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 interface Message {
   id: string;
@@ -220,9 +221,13 @@ export default function KaiAIChat() {
     try {
       const finalTitle = title || (history.find(h => h.role === 'user')?.content.substring(0,50) || 'Untitled Chat');
 
-      const response = await fetch('/api/user-database/ai-chats/save', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/ai-chats/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' , 'Authorization': `Bearer ${token}`},
         body: JSON.stringify({
           chatId,
           title: finalTitle,
@@ -294,9 +299,13 @@ export default function KaiAIChat() {
   const deletePastChat = async (chatId: string) => {
     if (!confirm('Delete this chat?')) return;
     try {
-      const res = await fetch('/api/user-database/ai-chats/delete', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/ai-chats/delete`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' , 'Authorization': `Bearer ${token}`},
         body: JSON.stringify({ chatId }),
       });
       if (res.ok) {

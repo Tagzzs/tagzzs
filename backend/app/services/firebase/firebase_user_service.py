@@ -5,13 +5,7 @@ from firebase_admin import credentials, firestore
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import os
-
-# Initialize Firebase Admin SDK
-if not firebase_admin._apps:
-    cred = credentials.Certificate(os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH"))
-    firebase_admin.initialize_app(cred)
-
-db = firestore.client()
+from app.services.firebase.firebase_admin_setup import admin_db as db
 
 
 class FirebaseUserService:

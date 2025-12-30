@@ -65,7 +65,7 @@ class GetTagSchema(BaseModel):
     tagName: Optional[str] = None
 
 
-router = APIRouter(prefix="/api/user-database/tags", tags=["Content Management"])
+router = APIRouter(prefix="/api/user-database/tags", tags=["Tags Management"])
 
 
 @router.post("/add")
