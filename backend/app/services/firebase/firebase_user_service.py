@@ -20,13 +20,15 @@ class FirebaseUserService:
         Create initial user document structure in Firebase.
         """
         try:
-            user_ref = db.collection('users').document(user_id)
-            user_ref.set({
-                'createdAt': created_at,
-                'totalContent': 0,
-                'totalTags': 0,
-                'updatedAt': created_at,
-            })
+            user_ref = db.collection("users").document(user_id)
+            user_ref.set(
+                {
+                    "createdAt": created_at,
+                    "totalContent": 0,
+                    "totalTags": 0,
+                    "updatedAt": created_at,
+                }
+            )
             return True
         except Exception as e:
             print(f"Error creating Firebase user document: {e}")
@@ -38,12 +40,16 @@ class FirebaseUserService:
         Add content to user's content subcollection.
         """
         try:
-            content_id = content_data.get('id')
+            content_id = content_data.get("id")
             if not content_id:
                 return False
 
-            content_ref = db.collection('users').document(user_id) \
-                .collection('content').document(content_id)
+            content_ref = (
+                db.collection("users")
+                .document(user_id)
+                .collection("content")
+                .document(content_id)
+            )
 
             content_ref.set(content_data)
 
@@ -60,12 +66,16 @@ class FirebaseUserService:
         Add tag to user's tags subcollection.
         """
         try:
-            tag_id = tag_data.get('id')
+            tag_id = tag_data.get("id")
             if not tag_id:
                 return False
 
-            tag_ref = db.collection('users').document(user_id) \
-                .collection('tags').document(tag_id)
+            tag_ref = (
+                db.collection("users")
+                .document(user_id)
+                .collection("tags")
+                .document(tag_id)
+            )
 
             tag_ref.set(tag_data)
 
@@ -82,14 +92,15 @@ class FirebaseUserService:
         Update user's total content count using an increment.
         """
         try:
-            user_ref = db.collection('users').document(user_id)
-            user_ref.update({
-                'totalContent': firestore.Increment(increment_value),
-                'updatedAt': datetime.now(timezone.utc).isoformat(),
-            })
+            user_ref = db.collection("users").document(user_id)
+            user_ref.update(
+                {
+                    "totalContent": firestore.Increment(increment_value),
+                    "updatedAt": datetime.now(timezone.utc).isoformat(),
+                }
+            )
         except Exception as e:
             print(f"Error updating content count: {e}")
-
 
     @staticmethod
     def update_tags_count(user_id: str, increment_value: int) -> None:
@@ -97,14 +108,15 @@ class FirebaseUserService:
         Update user's total tags count using an increment.
         """
         try:
-            user_ref = db.collection('users').document(user_id)
-            user_ref.update({
-                'totalTags': firestore.Increment(increment_value),
-                'updatedAt': datetime.now(timezone.utc).isoformat(),
-            })
+            user_ref = db.collection("users").document(user_id)
+            user_ref.update(
+                {
+                    "totalTags": firestore.Increment(increment_value),
+                    "updatedAt": datetime.now(timezone.utc).isoformat(),
+                }
+            )
         except Exception as e:
             print(f"Error updating tags count: {e}")
-
 
     @staticmethod
     def get_user_document(user_id: str) -> Optional[Dict[str, Any]]:
@@ -112,7 +124,7 @@ class FirebaseUserService:
         Get user document with stats.
         """
         try:
-            user_doc = db.collection('users').document(user_id).get()
+            user_doc = db.collection("users").document(user_id).get()
             if user_doc.exists:
                 return user_doc.to_dict()
             return None
@@ -120,23 +132,22 @@ class FirebaseUserService:
             print(f"Error getting user document: {e}")
             return None
 
-
     @staticmethod
     def delete_user_document(user_id: str) -> bool:
         """
         Delete user documents and subcollections
         """
         try:
-            user_ref = db.collection('users').document(user_id)
+            user_ref = db.collection("users").document(user_id)
             batch = db.batch()
 
             # Content
-            content_docs = user_ref.collection('content').list_documents()
+            content_docs = user_ref.collection("content").list_documents()
             for doc_ref in content_docs:
                 batch.delete(doc_ref)
 
             # Tags
-            tags_docs = user_ref.collection('tags').list_documents()
+            tags_docs = user_ref.collection("tags").list_documents()
             for doc_ref in tags_docs:
                 batch.delete(doc_ref)
 

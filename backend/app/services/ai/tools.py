@@ -81,19 +81,19 @@ class Tools:
         """
         try:
             from app.services.ai.semantic_search import SemanticSearchService
-            from app.connections.firebase.firebase_connections import fetch_content_by_ids
+            from app.connections.firebase.firebase_connections import (
+                fetch_content_by_ids,
+            )
 
             logger.info(f"[TOOLS] Knowledge base search for user {user_id}: {query}")
 
             search_service = SemanticSearchService()
-            results = await search_service._execute_rrf_search(
-                user_id=user_id, query=query, limit=5
-            )
+            results = await search_service.search(user_id=user_id, query=query, limit=5)
 
             if not results:
                 return {
                     "text": "No relevant content found in your knowledge base.",
-                    "content_references": []
+                    "content_references": [],
                 }
 
             content_ids = [r.content_id for r in results]
@@ -102,49 +102,55 @@ class Tools:
             if not content_details:
                 return {
                     "text": "Found matching content IDs but couldn't fetch details.",
-                    "content_references": []
+                    "content_references": [],
                 }
 
             content_references = []
             for item in content_details:
-                content_references.append({
-                    "content_id": item.get("content_id", ""),
-                    "title": item.get("title", "Untitled"),
-                    "source_url": item.get("source_url", ""),
-                    "content_type": item.get("content_type", ""),
-                })
+                content_references.append(
+                    {
+                        "content_id": item.get("content_id", ""),
+                        "title": item.get("title", "Untitled"),
+                        "source_url": item.get("source_url", ""),
+                        "content_type": item.get("content_type", ""),
+                    }
+                )
 
             formatted = []
             for item in content_details:
                 title = item.get("title", "Untitled")
                 summary = item.get("summary", "")
                 tags = item.get("tags", [])
-                
+
                 if len(summary) > 300:
                     summary = summary[:300] + "..."
-                
-                formatted.append(f"**{title}**\n{summary}\nTags: {', '.join(tags) if tags else 'None'}")
 
-            text_output = f"Found {len(content_details)} relevant items from your knowledge base:\n\n" + "\n\n---\n\n".join(formatted)
+                formatted.append(
+                    f"**{title}**\n{summary}\nTags: {', '.join(tags) if tags else 'None'}"
+                )
+
+            text_output = (
+                f"Found {len(content_details)} relevant items from your knowledge base:\n\n"
+                + "\n\n---\n\n".join(formatted)
+            )
 
             logger.info(
                 f"[TOOLS] Knowledge base search returned {len(content_details)} results with content"
             )
-            
-            return {
-                "text": text_output,
-                "content_references": content_references
-            }
+
+            return {"text": text_output, "content_references": content_references}
 
         except Exception as e:
             logger.error(f"[TOOLS] Knowledge base search failed: {str(e)}")
             return {
                 "text": f"Error: Knowledge base search failed. {str(e)}",
-                "content_references": []
+                "content_references": [],
             }
 
     @staticmethod
-    async def ask_user_permission(reason: str, action: str = "web_search", query: str = "") -> Dict[str, Any]:
+    async def ask_user_permission(
+        reason: str, action: str = "web_search", query: str = ""
+    ) -> Dict[str, Any]:
         """
         Request user permission for an action.
 

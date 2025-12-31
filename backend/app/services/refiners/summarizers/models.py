@@ -62,9 +62,7 @@ class SummarizationResponse(BaseModel):
 class SummarizationConfig(BaseModel):
     """Configuration for summarization engine using Groq API"""
 
-    model_name: str = (
-        "llama-3.1-8b-instant"
-    )
+    model_name: str = "llama-3.1-8b-instant"
     api_key: str = ""  # Will be loaded from environment
 
     # Summarization parameters

@@ -27,13 +27,13 @@ async def get_current_user(request: Request) -> Dict[str, Any]:
             token,
             SUPABASE_JWT_SECRET,
             algorithms=["HS256"],
-            options={"verify_aud": False}
+            options={"verify_aud": False},
         )
 
         return {
             "id": payload.get("sub"),
             "email": payload.get("email"),
-            "role": payload.get("role")
+            "role": payload.get("role"),
         }
     except jwt.ExpiredSignatureError:
         raise Exception("Token has expired")

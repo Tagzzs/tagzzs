@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, HttpUrl, model_validator, ValidationError
 from supabase import create_client, Client
 
-# Internal imports 
+# Internal imports
 from app.services.token_verifier import get_current_user
 from app.utils.supabase.auth import create_auth_error
 
@@ -15,10 +15,7 @@ from app.utils.supabase.auth import create_auth_error
 def format_validation_errors(exc: ValidationError) -> List[Dict[str, str]]:
     """Converts Pydantic errors into the structured ProfileUpdateError format."""
     return [
-        {
-            "field": ".".join(map(str, error["loc"])),
-            "message": error["msg"]
-        }
+        {"field": ".".join(map(str, error["loc"])), "message": error["msg"]}
         for error in exc.errors()
     ]
 
@@ -27,33 +24,39 @@ class ProfileUpdateSchema(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     avatar_url: Optional[HttpUrl] = None
 
-    @model_validator(mode='after')
-    def check_at_least_one_field(self) -> 'ProfileUpdateSchema':
+    @model_validator(mode="after")
+    def check_at_least_one_field(self) -> "ProfileUpdateSchema":
         provided_fields = self.model_dump(exclude_unset=True)
         if not provided_fields:
             raise ValueError("At least one field must be provided")
         return self
 
-        
+
 router = APIRouter(prefix="/api/user-database", tags=["Profile Change"])
 
 
 supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+supabase: Client = (
+    create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+)
 
 
 @router.post("/profile")
-async def update_profile(request: Request, user: Dict[str, Any] = Depends(get_current_user)):
+async def update_profile(
+    request: Request, user: Dict[str, Any] = Depends(get_current_user)
+):
     try:
         if not user:
             return create_auth_error("Authentication required to update profile")
-        
+
         if not supabase:
-            return JSONResponse(status_code=500, content={"error": "Supabase configuration missing"})
+            return JSONResponse(
+                status_code=500, content={"error": "Supabase configuration missing"}
+            )
 
         user_id = user.get("id")
-        
+
         # Parse and Validate Body
         try:
             body = await request.json()
@@ -66,7 +69,7 @@ async def update_profile(request: Request, user: Dict[str, Any] = Depends(get_cu
                     "error": "Validation failed",
                     "code": "VALIDATION_ERROR",
                     "details": format_validation_errors(exc),
-                }
+                },
             )
         except Exception:
             return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
@@ -77,7 +80,7 @@ async def update_profile(request: Request, user: Dict[str, Any] = Depends(get_cu
 
         # Check if user exists (Equivalent to .select("*").eq().single())
         check_user = supabase.table("users").select("*").eq("userid", user_id).execute()
-        
+
         if not check_user.data:
             return JSONResponse(
                 status_code=404,
@@ -85,8 +88,8 @@ async def update_profile(request: Request, user: Dict[str, Any] = Depends(get_cu
                     "success": False,
                     "error": "User not found",
                     "code": "USER_NOT_FOUND",
-                    "details": "The requested user record does not exist in the database."
-                }
+                    "details": "The requested user record does not exist in the database.",
+                },
             )
 
         # Perform Update
@@ -109,8 +112,8 @@ async def update_profile(request: Request, user: Dict[str, Any] = Depends(get_cu
                 content={
                     "success": False,
                     "error": "Failed to update profile",
-                    "code": "PROFILE_UPDATE_ERROR"
-                }
+                    "code": "PROFILE_UPDATE_ERROR",
+                },
             )
 
         return JSONResponse(
@@ -122,7 +125,7 @@ async def update_profile(request: Request, user: Dict[str, Any] = Depends(get_cu
                 "fieldsUpdated": list(fields_to_update.keys()),
                 "cacheInvalidated": True,
                 "timestamp": current_time,
-            }
+            },
         )
 
     except Exception as e:
@@ -132,6 +135,6 @@ async def update_profile(request: Request, user: Dict[str, Any] = Depends(get_cu
                 "success": False,
                 "error": "Internal server error",
                 "code": "INTERNAL_ERROR",
-                "details": str(e)
-            }
+                "details": str(e),
+            },
         )

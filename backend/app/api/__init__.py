@@ -31,5 +31,5 @@ __all__ = [
     "tags_router",
     "profile_router",
     "upload_router",
-    "ai_chats_router"
+    "ai_chats_router",
 ]

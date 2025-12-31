@@ -174,7 +174,7 @@ class YouTubeExtractionOrchestrator:
                 "status": "degraded",
                 "message": f"Groq LLM not available: {str(e)}",
             }
-            
+
         try:
             status["components"]["transformers"] = {
                 "status": "healthy",
@@ -195,6 +195,7 @@ class YouTubeExtractionOrchestrator:
             status["overall_status"] = "degraded"
 
         return status
+
 
 async def extract_youtube_content(url: str) -> YouTubeExtractionResponse:
     """

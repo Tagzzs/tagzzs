@@ -108,6 +108,7 @@ class EmbeddingsOrchestrator:
 
         return response
 
+
 async def generate_and_store_embeddings(
     doc_id: str,
     text: str,

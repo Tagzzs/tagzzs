@@ -5,10 +5,7 @@ Provides PDF content extraction capabilities following the architecture specific
 """
 
 # Core extraction functionality
-from .orchestrator import (
-    PDFExtractionOrchestrator,
-    extract_pdf_content_orchestrated
-)
+from .orchestrator import PDFExtractionOrchestrator, extract_pdf_content_orchestrated
 
 # Data models
 from .models import (
@@ -20,25 +17,17 @@ from .models import (
     ImageElement,
     PDFMetaData,
     PDFExtractionError,
-    PDFProcessingConfig
+    PDFProcessingConfig,
 )
 
 # Core engine components
-from .extractor import (
-    PDFExtractorEngine
-)
+from .extractor import PDFExtractorEngine
 
 # Output formatting
-from .output_structuring import (
-    PDFOutputStructurer,
-    structure_pdf_extraction_output
-)
+from .output_structuring import PDFOutputStructurer, structure_pdf_extraction_output
 
 # Error handling
-from .error_handling import (
-    PDFErrorCategory,
-    handle_pdf_extraction_error
-)
+from .error_handling import PDFErrorCategory, handle_pdf_extraction_error
 
 __all__ = [
     "extract_pdf_content_orchestrated",
@@ -56,5 +45,5 @@ __all__ = [
     "PDFProcessingConfig",
     "PDFExtractionError",
     "PDFErrorCategory",
-    "handle_pdf_extraction_error"
+    "handle_pdf_extraction_error",
 ]

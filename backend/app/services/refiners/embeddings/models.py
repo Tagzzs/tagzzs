@@ -26,7 +26,7 @@ class EmbeddingRequest(BaseModel):
 
     text: str
     metadata: EmbeddingMetadata
-    doc_id: Optional[str] = None 
+    doc_id: Optional[str] = None
 
     @validator("text")
     def validate_text(cls, v):
@@ -77,8 +77,8 @@ class EmbeddingConfig(BaseModel):
     retry_delay: int = 1  # seconds
 
 
-
 # ========== PHASE 2 EMBEDDING & STORAGE REQUEST/RESPONSE ==========
+
 
 class EmbedStoreRequest(BaseModel):
     """

@@ -23,7 +23,7 @@ from app.api import (
     tags_router,
     profile_router,
     upload_router,
-    ai_chats_router
+    ai_chats_router,
 )
 
 load_environment()
