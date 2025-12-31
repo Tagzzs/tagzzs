@@ -4,20 +4,13 @@ import time
 from typing import Dict, Any
 from fastapi import APIRouter, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
-from supabase import create_client, Client
+from app.utils.supabase.supabase_client import supabase
 
 # Internal imports
 from app.services.token_verifier import get_current_user
 from app.utils.supabase.auth import create_auth_error
 
 router = APIRouter(prefix="/api", tags=["Storage"])
-
-SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase: Client = (
-    create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
-)
-
 
 @router.post("/upload")
 async def upload_file(
