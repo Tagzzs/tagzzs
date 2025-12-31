@@ -63,6 +63,7 @@ class SummarizationOrchestrator:
 
         return response
 
+
 async def summarize_content(
     text: str,
     max_length: int = 180,

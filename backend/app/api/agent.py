@@ -96,7 +96,8 @@ class AgentQueryResponse(BaseModel):
         default_factory=list, description="Sources used in response"
     )
     referenced_content: List[Dict[str, Any]] = Field(
-        default_factory=list, description="Content items referenced (for clickable UI boxes)"
+        default_factory=list,
+        description="Content items referenced (for clickable UI boxes)",
     )
     execution_time_ms: int = Field(
         ..., description="Total execution time in milliseconds"
@@ -199,14 +200,14 @@ async def query_agent(
 ) -> AgentQueryResponse:
     """
     Execute a single query through the async ReAct agent.
-    
+
     Features:
     - Async web search via DuckDuckGo
     - Knowledge base search via ChromaDB
     - 5-step reasoning loop with automatic termination
     """
     start_time = time.time()
-    
+
     try:
         user_id = validate_user_authentication(x_user_id, request.user_id)
 
@@ -217,7 +218,7 @@ async def query_agent(
         agent = ReActAgent(user_id)
         response = await agent.run(
             user_query=request.query,
-            conversation_history=request.conversation_history or []
+            conversation_history=request.conversation_history or [],
         )
 
         execution_time = int((time.time() - start_time) * 1000)
@@ -240,7 +241,6 @@ async def query_agent(
             query=request.query,
             answer=response.response_text,
             status=response.status,
-
             sources_used=response.sources,
             referenced_content=response.referenced_content,
             execution_time_ms=execution_time,
@@ -276,7 +276,7 @@ async def chat_with_agent(
 ) -> AgentChatResponse:
     """
     Engage in a multi-turn conversation with the async ReAct agent.
-    
+
     Features:
     - Async web search via DuckDuckGo
     - Knowledge base search via ChromaDB
@@ -284,7 +284,7 @@ async def chat_with_agent(
     - 5-step reasoning loop
     """
     start_time = time.time()
-    
+
     try:
         user_id = validate_user_authentication(x_user_id, request.user_id)
 
@@ -296,7 +296,7 @@ async def chat_with_agent(
         agent = ReActAgent(user_id)
         response = await agent.run(
             user_query=request.message,
-            conversation_history=request.conversation_history or []
+            conversation_history=request.conversation_history or [],
         )
 
         execution_time = int((time.time() - start_time) * 1000)
@@ -380,7 +380,7 @@ async def list_tasks() -> TaskListResponse:
     """List all available tools that the ReAct agent can use."""
     try:
         from app.services.ai.tools import Tools
-        
+
         tools = [
             TaskInfo(
                 name="web_search",

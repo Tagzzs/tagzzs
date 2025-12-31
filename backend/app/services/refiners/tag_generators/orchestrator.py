@@ -60,6 +60,7 @@ class TagGenerationOrchestrator:
 
         return response
 
+
 async def generate_tags(
     text: str, top_k: int = 5, config: Optional[TagGenerationConfig] = None
 ) -> TagGenerationResponse:

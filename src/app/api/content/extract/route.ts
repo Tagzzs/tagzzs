@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
     const extractionTimeout = options.timeout + 60000; // Add buffer time
 
     try {
-      const response = await fetch(`${process.env.TAGZZS_API_URL}/extract-refine/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/extract-refine/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

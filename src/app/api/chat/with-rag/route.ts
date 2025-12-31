@@ -101,7 +101,7 @@ export async function POST(
     console.log(`[RAG_CHAT_PROXY] Conversation ID: ${conversationId}`);
 
     // Get Python backend URL from environment
-    const backendUrl = process.env.TAGZZS_API_URL || 'http://localhost:8000';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
     const chatUrl = `${backendUrl}/ai-chat/with-rag`;
 
     console.log(`[RAG_CHAT_PROXY] Forwarding to Python backend: ${chatUrl}`);

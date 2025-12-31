@@ -63,7 +63,7 @@ export async function POST(
     }
 
     // Get Python backend URL from environment
-    const backendUrl = process.env.TAGZZS_API_URL || "http://localhost:8000";
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
     const searchUrl = `${backendUrl}/search/semantic-query`;
 
     console.log(`[SEMANTIC_QUERY_PROXY] Forwarding to Python backend: ${searchUrl}`);
@@ -74,8 +74,10 @@ export async function POST(
       query,
       tags: tags || undefined,
       content_id_filter: content_id_filter || undefined,
-      limit: limit || 10,
+      limit: limit || 5,
     };
+
+    console.log("[SEMANTIC_QUERY_PROXY] Request body:", backendRequestBody);
 
     // Forward request to Python backend
     console.log("[SEMANTIC_QUERY_PROXY] Sending request to Python backend...");

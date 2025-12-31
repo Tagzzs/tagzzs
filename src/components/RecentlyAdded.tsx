@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookOpen, Plus, Tag, Calendar, User, FileText, Video, File, Link as LinkIcon, Image as ImageIcon } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { createClient } from "@/utils/supabase/client";
 
 interface ContentItem {
   id: string;
@@ -89,15 +90,19 @@ const RecentlyAdded: React.FC<RecentlyAddedProps> = ({
     const fetchRecentlyAddedData = async () => {
       setIsLoading(true);
       try {
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+
         const [contentRes, tagsRes] = await Promise.all([
-          fetch("/api/user-database/content/get", {
+          fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}`},
             body: JSON.stringify({ sortBy: "newest", limit: 4 }),
           }),
-          fetch("/api/user-database/tags/get", {
+          fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}`},
             body: JSON.stringify({}),
           }),
         ]);

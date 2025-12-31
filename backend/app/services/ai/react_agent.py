@@ -168,7 +168,9 @@ class ReActAgent:
                             "type": "permission_button",
                             "action": tool_result.get("action", "web_search"),
                             "query": tool_result.get("query", str(action_input)),
-                            "button_text": tool_result.get("button_text", "Allow Web Search"),
+                            "button_text": tool_result.get(
+                                "button_text", "Allow Web Search"
+                            ),
                         },
                     )
 
@@ -178,8 +180,13 @@ class ReActAgent:
                     sources.append(
                         {"type": "knowledge_base", "query": str(action_input)}
                     )
-                    if isinstance(tool_result, dict) and "content_references" in tool_result:
-                        referenced_content.extend(tool_result.get("content_references", []))
+                    if (
+                        isinstance(tool_result, dict)
+                        and "content_references" in tool_result
+                    ):
+                        referenced_content.extend(
+                            tool_result.get("content_references", [])
+                        )
                         tool_result = tool_result.get("text", str(tool_result))
 
                 messages.append({"role": "assistant", "content": response})

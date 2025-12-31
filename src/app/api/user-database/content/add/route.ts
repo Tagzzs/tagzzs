@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
 
     // Store extracted content and embedding in external service
     try {
-      const tagzzsApiUrl = process.env.TAGZZS_API_URL;
+      const tagzzsApiUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       if (!tagzzsApiUrl) {
       } else {
         const hasContent = validatedData.rawContent && validatedData.rawContent.trim().length > 0;

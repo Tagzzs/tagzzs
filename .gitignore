@@ -97,3 +97,6 @@ backend/node_modules/
 
 tests/
 .ruff_cache/
+
+# Firebase configuration
+firebase-config.json

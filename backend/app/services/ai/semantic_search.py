@@ -37,7 +37,7 @@ class SemanticSearchService:
     def __init__(self):
         self.logger = logger
 
-    async def _execute_rrf_search(
+    async def search(
         self,
         user_id: str,
         query: str,

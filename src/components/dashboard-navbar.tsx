@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
+import { createClient } from "@/utils/supabase/client"
 
 interface ContentItem {
   id: string;
@@ -32,10 +33,16 @@ export function DashboardNavbar() {
       if (contentMatch) {
         const contentId = contentMatch[1]
         try {
-          const response = await fetch('/api/user-database/content/get', {
+          const supabase = createClient()
+          const { data: { session } } = await supabase.auth.getSession()
+          const token = session?.access_token
+    
+          // Fetch content data
+          const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({})
           })

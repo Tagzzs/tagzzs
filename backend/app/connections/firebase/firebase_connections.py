@@ -39,20 +39,25 @@ def get_firestore_client() -> firestore.Client:
 
     if _firestore_client is None:
         try:
-            if not _app_initialized:
-                logger.info(f"🔥 Initializing Firebase for project: {FIREBASE_PROJECT_ID}")
-                
-                cred = credentials.Certificate({
-                    "type": "service_account",
-                    "project_id": FIREBASE_PROJECT_ID,
-                    "private_key": FIREBASE_PRIVATE_KEY,
-                    "client_email": FIREBASE_CLIENT_EMAIL,
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                })
-                
+            if not firebase_admin._apps:
+                logger.info(
+                    f"🔥 Initializing Firebase for project: {FIREBASE_PROJECT_ID}"
+                )
+
+                cred = credentials.Certificate(
+                    {
+                        "type": "service_account",
+                        "project_id": FIREBASE_PROJECT_ID,
+                        "private_key": FIREBASE_PRIVATE_KEY,
+                        "client_email": FIREBASE_CLIENT_EMAIL,
+                        "token_uri": "https://oauth2.googleapis.com/token",
+                    }
+                )
+
                 firebase_admin.initialize_app(cred)
-                _app_initialized = True
                 logger.info("✅ Firebase Admin SDK initialized")
+
+            _app_initialized = True
 
             _firestore_client = firestore.client()
             logger.info("✅ Firestore client connected")
@@ -64,61 +69,78 @@ def get_firestore_client() -> firestore.Client:
     return _firestore_client
 
 
-async def fetch_content_by_ids(user_id: str, content_ids: List[str]) -> List[Dict[str, Any]]:
+async def fetch_content_by_ids(
+    user_id: str, content_ids: List[str]
+) -> List[Dict[str, Any]]:
     """
     Fetch content details from Firestore by content IDs.
-    
+
     Efficiently fetches multiple documents using batch get.
-    
+
     Args:
         user_id: User ID for the collection path
         content_ids: List of content IDs to fetch
-        
+
     Returns:
         List of content documents with their data
     """
     try:
         import asyncio
-        
+
         if not content_ids:
             return []
-            
-        logger.info(f"[FIREBASE] Fetching {len(content_ids)} content items for user {user_id}")
-        
+
+        logger.info(
+            f"[FIREBASE] Fetching {len(content_ids)} content items for user {user_id}"
+        )
+
         def _fetch():
             db = get_firestore_client()
             results = []
-            
+
             # Fetch all content docs in one batch
             # Path: users/{user_id}/content/{content_id}
             for content_id in content_ids[:5]:  # Limit to 5 for context window
                 try:
-                    doc_ref = db.collection("users").document(user_id).collection("content").document(content_id)
+                    doc_ref = (
+                        db.collection("users")
+                        .document(user_id)
+                        .collection("content")
+                        .document(content_id)
+                    )
                     doc = doc_ref.get()
-                    
+
                     if doc.exists:
                         data = doc.to_dict()
-                        
-                        summary = data.get("description") or data.get("rawContent") or ""
+
+                        summary = (
+                            data.get("description") or data.get("rawContent") or ""
+                        )
                         tags = data.get("tagsId") or data.get("tags") or []
-                        
-                        results.append({
-                            "content_id": content_id,
-                            "title": data.get("title", "Untitled"),
-                            "summary": summary,
-                            "tags": tags,
-                            "source_url": data.get("link", "") or data.get("source_url", ""),
-                            "content_type": data.get("contentType", "") or data.get("content_type", ""),
-                        })
+
+                        results.append(
+                            {
+                                "content_id": content_id,
+                                "title": data.get("title", "Untitled"),
+                                "summary": summary,
+                                "tags": tags,
+                                "source_url": data.get("link", "")
+                                or data.get("source_url", ""),
+                                "content_type": data.get("contentType", "")
+                                or data.get("content_type", ""),
+                            }
+                        )
                 except Exception as e:
-                    logger.warning(f"[FIREBASE] Failed to fetch content {content_id}: {str(e)}")
-                    
+                    logger.warning(
+                        f"[FIREBASE] Failed to fetch content {content_id}: {str(e)}"
+                    )
+
             return results
-        
+
         results = await asyncio.to_thread(_fetch)
         logger.info(f"[FIREBASE] Fetched {len(results)} content items")
         return results
-        
+
     except Exception as e:
         logger.error(f"[FIREBASE] Error fetching content: {str(e)}")
         return []

@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useToast } from "./use-toast";
 import { useUserProfile } from "./useUserProfile";
+import { createClient } from "@/utils/supabase/client";
 
 interface ProfileUpdateData {
   name?: string;
@@ -30,10 +31,14 @@ export function useProfileUpdate() {
       setUpdateError(null);
 
       try {
-        // Call your API endpoint
-        const response = await fetch("/api/user-database/profile", {
+        
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/profile`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" , 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(data),
         });
 

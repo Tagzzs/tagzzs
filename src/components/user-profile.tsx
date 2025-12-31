@@ -42,8 +42,31 @@ export function UserProfile() {
     )
   }
 
+    // Update Sign Out to use the secure Server Action flow
   const handleSignOut = async () => {
-    await signOut()
+    try {
+      // Call Python backend to invalidate the session
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-out`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      // Manually removing browser cookies
+      const { createClient: createBrowserClient } = await import("@/utils/supabase/client");
+      const supabase = createBrowserClient();
+      await supabase.auth.signOut();
+
+      // Clear state and hard redirect
+      router.refresh();
+      window.location.href = "/auth/sign-in";
+    } catch (error) {
+      console.error("Sign-out error:", error);
+      window.location.href = "/auth/sign-in";
+    }
   }
 
   const handleSettings = () => {

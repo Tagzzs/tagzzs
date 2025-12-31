@@ -5,6 +5,20 @@ API endpoints for content refinement pipelines (extract-refine combos)
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, HttpUrl
+import asyncio
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, HttpUrl
+import time
+import uuid
+import os
+import httpx
+import jwt
+from datetime import datetime
+from typing import Dict, Any
+from urllib.parse import urlparse
+from fastapi.responses import JSONResponse
+from app.services.token_verifier import get_current_user
 
 router = APIRouter(tags=["refinement"])
 
@@ -63,6 +77,295 @@ async def refine_extracted_content(request: dict):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Phase 1 refinement failed: {str(e)}"
+        )
+
+
+# Validation of extraction first
+rate_limit_store: Dict[str, Dict[str, Any]] = {}
+
+RATE_LIMIT_CONFIG = {
+    "windowMs": 15 * 60 * 1000,
+    "maxRequests": 20,
+    "blockDuration": 60 * 60 * 1000,
+}
+
+BLOCKED_DOMAINS = [
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "192.168.",
+    "10.",
+    "172.16.",
+    "172.17.",
+    "172.18.",
+    "172.19.",
+    "172.20.",
+    "172.21.",
+    "172.22.",
+    "172.23.",
+    "172.24.",
+    "172.25.",
+    "172.26.",
+    "172.27.",
+    "172.28.",
+    "172.29.",
+    "172.30.",
+    "172.31.",
+]
+
+# Helper Functions
+
+
+def check_rate_limit(user_id: str):
+    now = int(time.time() * 1000)
+    user_limit = rate_limit_store.get(user_id)
+
+    if not user_limit or now > user_limit["resetTime"]:
+        rate_limit_store[user_id] = {
+            "count": 1,
+            "resetTime": now + RATE_LIMIT_CONFIG["windowMs"],
+        }
+        return {
+            "allowed": True,
+            "remainingRequests": RATE_LIMIT_CONFIG["maxRequests"] - 1,
+            "resetTime": now + RATE_LIMIT_CONFIG["windowMs"],
+        }
+
+    if user_limit["count"] >= RATE_LIMIT_CONFIG["maxRequests"]:
+        return {"allowed": False, "resetTime": user_limit["resetTime"]}
+
+    user_limit["count"] += 1
+    return {
+        "allowed": True,
+        "remainingRequests": RATE_LIMIT_CONFIG["maxRequests"] - user_limit["count"],
+        "resetTime": user_limit["resetTime"],
+    }
+
+
+def validate_url_security(url: str):
+    try:
+        parsed_url = urlparse(url)
+        hostname = (parsed_url.hostname or "").lower()
+        for blocked_domain in BLOCKED_DOMAINS:
+            if blocked_domain in hostname:
+                return {
+                    "safe": False,
+                    "reason": "Access to internal/private networks is not allowed",
+                }
+        if parsed_url.scheme not in ["http", "https"]:
+            return {
+                "safe": False,
+                "reason": "Only HTTP and HTTPS protocols are allowed",
+            }
+        if any(pattern in hostname for pattern in ["admin", "internal", "private"]):
+            return {
+                "safe": False,
+                "reason": "Access to administrative or internal resources is not allowed",
+            }
+        return {"safe": True}
+    except:
+        return {"safe": False, "reason": "Invalid URL format"}
+
+
+def log_request(request_id, user_id, url, status, processing_time, error_message=None):
+    """
+    Log request for monitoring - Replicated exactly from JS
+    """
+    _logEntry = {
+        "requestId": request_id,
+        "userId": user_id,
+        "url": url,
+        "status": status,
+        "processingTime": processing_time,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "error": error_message if error_message else None,
+    }
+
+
+# Called by the frontend which calls the /extract-refine endpoint
+@router.post("/api/content/extract")
+async def post_extract(req: Request):
+    request_id = f"req_{int(time.time() * 1000)}_{uuid.uuid4().hex[:9]}"
+    start_time = int(time.time() * 1000)
+    user_id = None
+    url = None
+
+    try:
+        # TODO: User authentication
+        # Get authenticated user
+        # try:
+        #     user = await get_current_user(req)
+        #     user_id = user["id"]
+        # except Exception as auth_err:
+        #     log_request(request_id, 'anonymous', 'unknown', 'error', int(time.time() * 1000) - start_time, str(auth_err))
+        #     return JSONResponse(
+        #         content={"error": "Authentication required to extract content"},
+        #         status_code=401
+        #     )
+
+        # Rate limiting check
+        rate_limit_result = check_rate_limit(user_id)
+        if not rate_limit_result["allowed"]:
+            log_request(
+                request_id,
+                user_id,
+                "unknown",
+                "error",
+                int(time.time() * 1000) - start_time,
+                "Rate limit exceeded",
+            )
+            reset_time = rate_limit_result["resetTime"]
+            retry_after = max(0, int((reset_time - (time.time() * 1000)) / 1000))
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded",
+                    "details": "Too many requests. Please try again later.",
+                    "resetTime": reset_time,
+                },
+                headers={
+                    "X-RateLimit-Limit": str(RATE_LIMIT_CONFIG["maxRequests"]),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_time),
+                    "Retry-After": str(retry_after),
+                },
+            )
+
+        # Parse request body
+        try:
+            body = await req.json()
+        except:
+            log_request(
+                request_id,
+                user_id,
+                "unknown",
+                "error",
+                int(time.time() * 1000) - start_time,
+                "Invalid JSON format",
+            )
+            return JSONResponse(
+                content={"error": "Invalid JSON format"}, status_code=400
+            )
+
+        # Validation (Replicating ExtractRequestSchema)
+        url = body.get("url")
+        if not url or not isinstance(url, str):
+            log_request(
+                request_id,
+                user_id,
+                url or "invalid",
+                "error",
+                int(time.time() * 1000) - start_time,
+                "Request validation failed",
+            )
+            return JSONResponse(
+                content={
+                    "error": "Invalid request format",
+                    "details": {"url": ["Invalid URL format"]},
+                },
+                status_code=400,
+            )
+
+        options = body.get("options", {})
+        timeout_ms = options.get("timeout", 30000)
+
+        # Security validation
+        security_check = validate_url_security(url)
+        if not security_check["safe"]:
+            log_request(
+                request_id,
+                user_id,
+                url,
+                "error",
+                int(time.time() * 1000) - start_time,
+                f"Security check failed: {security_check['reason']}",
+            )
+            return JSONResponse(
+                content={
+                    "error": "URL not allowed",
+                    "details": security_check["reason"],
+                },
+                status_code=403,
+            )
+
+        # Extraction Pipeline logic
+        extraction_timeout = (timeout_ms + 60000) / 1000.0
+        try:
+            async with httpx.AsyncClient() as client:
+                pipeline_result = await extract_and_refine_auto({"url": url})
+
+                processing_time = int(time.time() * 1000) - start_time
+
+                if not pipeline_result or "content" not in pipeline_result:
+                    raise Exception(
+                        "External service returned invalid response structure"
+                    )
+        except Exception as extract_error:
+            processing_time = int(time.time() * 1000) - start_time
+            log_request(
+                request_id, user_id, url, "error", processing_time, str(extract_error)
+            )
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "result": "error",
+                    "error": "Failed to extract content from the provided URL",
+                    "details": str(extract_error)
+                    if os.getenv("NODE_ENV") == "development"
+                    else "Content extraction service is currently unavailable...",
+                    "requestId": request_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            )
+
+        # Success Response
+        log_request(request_id, user_id, url, "success", processing_time)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "result": pipeline_result.get("result", "success"),
+                "metadata": pipeline_result.get("metadata"),
+                "content": pipeline_result.get("content"),
+                "error": pipeline_result.get("error"),
+                "requestId": request_id,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+            headers={
+                "X-Request-ID": request_id,
+                "X-Processing-Time": str(processing_time),
+                "X-RateLimit-Limit": str(RATE_LIMIT_CONFIG["maxRequests"]),
+                "X-RateLimit-Remaining": str(
+                    rate_limit_result.get("remainingRequests", 0)
+                ),
+                "X-RateLimit-Reset": str(rate_limit_result.get("resetTime", "")),
+            },
+        )
+
+    except Exception as api_error:
+        # Replicating status code mapping (503, 408, 502, 500)
+        processing_time = int(time.time() * 1000) - start_time
+        error_message = str(api_error)
+        status_code = 500
+        error_label = "Internal server error"
+        details = None
+
+        if "rate limit" in error_message.lower() or "429" in error_message:
+            status_code = 503
+            error_label = "AI service rate limit"
+        elif "timeout" in error_message.lower():
+            status_code = 408
+            error_label = "Request timeout"
+        elif "network" in error_message.lower():
+            status_code = 502
+            error_label = "Network error"
+
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "error": error_label,
+                "requestId": request_id,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )
 
 

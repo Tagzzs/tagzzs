@@ -14,6 +14,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { marked } from 'marked'
 import Image from "next/image"
+import { createClient } from '@/utils/supabase/client'
+
 
 // Configure marked for safe HTML output
 marked.setOptions({
@@ -76,11 +78,16 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       setIsLoading(true)
       setError(null)
 
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
       // Fetch content data
-      const contentResponse = await fetch('/api/user-database/content/get', {
+      const contentResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({})
       })
@@ -108,10 +115,11 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
       // Fetch tag data if content has tags
       if (item.tagsId && item.tagsId.length > 0) {
-        const tagsResponse = await fetch('/api/user-database/tags/get', {
+        const tagsResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({})
         })
@@ -231,14 +239,25 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
     try {
       setIsSaving(true)
-      
+
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { user } } = await supabase.auth.getUser()
+      const token = session?.access_token
+
+      if(!user) {
+        console.log("Authentication Error. Sign-in and try again.")
+      }
+            
       // Make API call to update content notes
-      const response = await fetch('/api/user-database/content/edit', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/edit`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          userId: user!.id,
           contentId: contentItem.id,
           personalNotes: editedNotes
         })
@@ -255,7 +274,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       }
 
       // Update local state with the returned data
-      setContentItem(result.data)
+      setContentItem({...result.data, id: contentItem.id})
       setIsEditing(false)
     } catch (error) {
       console.error('Error saving notes:', error)
@@ -275,12 +294,17 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
     try {
       setIsDeleting(true)
+
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
       
       // Make API call to delete content
-      const response = await fetch('/api/user-database/content/delete', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/delete`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           contentId: contentItem.id

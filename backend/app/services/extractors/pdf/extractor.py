@@ -405,6 +405,7 @@ class PDFExtractorEngine:
 
         return response
 
+
 async def extract_pdf_content(
     url: str, config: Optional[PDFProcessingConfig] = None
 ) -> PDFExtractionResponse:

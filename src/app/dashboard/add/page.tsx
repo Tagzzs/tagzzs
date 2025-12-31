@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X, LinkIcon, Upload, Sparkles, Check, Loader2, Image as ImageIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { marked } from 'marked'
+import { createClient } from '@/utils/supabase/client'
 
 // Configure marked for safe HTML output
 marked.setOptions({
@@ -188,11 +189,16 @@ export default function AddContentPage() {
     
     for (const tagName of tagNames) {
       try {
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+
         // First, try to find existing tag
-        const checkResponse = await fetch('/api/user-database/tags/get', {
+        const checkResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             tagName: tagName.trim()
@@ -210,10 +216,11 @@ export default function AddContentPage() {
         // If tag doesn't exist, create it
         const randomColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0').toUpperCase()}`;
         
-        const createResponse = await fetch('/api/user-database/tags/add', {
+        const createResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/add`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             tagName: tagName.trim(),
@@ -274,10 +281,15 @@ export default function AddContentPage() {
         contentData.thumbnailUrl = formData.thumbnailUrl;
       }
 
-      const contentResponse = await fetch('/api/user-database/content/add', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const contentResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/add`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(contentData)
       });
@@ -336,8 +348,13 @@ export default function AddContentPage() {
 
       setUploadProgress('Uploading file...')
 
-      const response = await fetch('/api/upload', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+        
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`, {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       })
 
@@ -393,8 +410,13 @@ export default function AddContentPage() {
 
       setThumbnailUploadProgress('Uploading thumbnail...')
 
-      const response = await fetch('/api/upload', {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+        
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`, {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formDataPayload,
       })
 

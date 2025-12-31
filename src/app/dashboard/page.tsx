@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { ClientMeta } from "@/components/client-meta";
+import { createClient } from "@/utils/supabase/client";
 
 interface ContentItem {
   id: string;
@@ -52,15 +53,20 @@ export default function DashboardPage() {
       setIsLoading(true);
       setError(null);
 
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
       const [contentResponse, tagsResponse] = await Promise.all([
-        fetch("/api/user-database/content/get", {
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ sortBy: "newest", limit: 4 }),
-        }),
-        fetch("/api/user-database/tags/get", {
+        }),               
+        
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({}),
         }),
       ]);
@@ -75,9 +81,9 @@ export default function DashboardPage() {
         throw new Error("API returned error response");
       }
 
-      const allContentResponse = await fetch("/api/user-database/content/get", {
+      const allContentResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ sortBy: "newest" }),
       });
       let allContentData = { data: [] };
