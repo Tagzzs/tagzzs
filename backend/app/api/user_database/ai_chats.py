@@ -215,11 +215,9 @@ async def get_ai_chat(
 async def list_ai_chats(user: Dict[str, Any] = Depends(get_current_user)):
     try:
         if not user:
-            print("[DEBUG] No user found in request")
             return create_auth_error("Authentication required to retrieve chats")
 
         user_id = user.get("id")
-        print(f"[DEBUG] list_ai_chats user_id: {user_id}")
         # Debug logging removed
         ai_chats_ref = (
             admin_db.collection("users").document(user_id).collection("ai-chats")
@@ -228,11 +226,6 @@ async def list_ai_chats(user: Dict[str, Any] = Depends(get_current_user)):
         # specific order_by might fail if index is missing or fields inconsistent
         # Fetch all and sort in memory for robustness
         snapshot = ai_chats_ref.get()
-
-        print(f"[DEBUG] Snapshot len: {len(snapshot)}")
-        if len(snapshot) > 0:
-            print(f"[DEBUG] First doc ID: {snapshot[0].id}")
-            print(f"[DEBUG] First doc data keys: {snapshot[0].to_dict().keys()}")
 
         if not snapshot:
             return JSONResponse(content={"success": True, "chats": [], "count": 0})
