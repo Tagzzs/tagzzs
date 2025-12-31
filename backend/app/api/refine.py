@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, HttpUrl
 import asyncio
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, HttpUrl
 import time
 import uuid
@@ -19,6 +19,7 @@ from typing import Dict, Any
 from urllib.parse import urlparse
 from fastapi.responses import JSONResponse
 from app.services.token_verifier import get_current_user
+from app.utils.supabase.auth import create_auth_error
 
 router = APIRouter(tags=["refinement"])
 
@@ -369,14 +370,20 @@ async def post_extract(req: Request):
         )
 
 
-@router.post("/extract-refine")
-async def extract_and_refine_auto(request: dict):
+@router.post("/extract-refine")  
+async def extract_and_refine_auto(
+    request: dict, 
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """
     Universal Extract & Refine Pipeline: Auto-detect content type → Extract → Summarize → Tag
 
     Automatically detects the content type from the URL and routes to the appropriate extractor.
     """
     try:
+        if not current_user:
+            return create_auth_error("Authentication required to update profile")
+        
         if "url" not in request or not request["url"]:
             raise ValueError("Missing required field: url")
 
@@ -406,25 +413,22 @@ async def extract_and_refine_auto(request: dict):
 
         # Route to appropriate extractor
         if content_type == "youtube":
-            from app.services.extractors.youtube import extract_youtube_content
-            from app.services.extractors.youtube.output_structuring import (
-                structure_youtube_for_refine_response,
-            )
+            from app.utils.supabase.supabase_client import supabase # globally initialized supabase client
+            response = supabase.table("extraction_queue").insert({
+                "video_url": url,
+                "user_id": current_user['id'], 
+                "status": "pending"
+            }).execute()
 
-            response = await extract_youtube_content(str(request["url"]))
+            if not response.data:
+                raise ValueError("Failed to add YouTube request to queue")
 
-            if not response.success:
-                error_messages = (
-                    [e.message for e in response.errors]
-                    if response.errors
-                    else ["Unknown error"]
-                )
-                raise ValueError(
-                    f"Failed to extract YouTube content: {'; '.join(error_messages)}"
-                )
-
-            return structure_youtube_for_refine_response(response)
-
+            return {
+                "status": "queued",
+                "message": "YouTube processing started in background",
+                "queue_id": response.data[0]["id"]
+            }
+        
         elif content_type == "pdf":
             from app.services.extractors.pdf.orchestrator import (
                 extract_pdf_content_orchestrated,

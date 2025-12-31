@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromHeaders, createAuthError } from "@/utils/supabase/auth";
 import { z } from "zod";
+import { createClient } from "@/utils/supabase/server";
 
 // Request validation schema
 const ExtractRequestSchema = z.object({
@@ -224,10 +225,15 @@ export async function POST(req: NextRequest) {
     const extractionTimeout = options.timeout + 60000; // Add buffer time
 
     try {
+      const supabase = await createClient()
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/extract-refine/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ url: validatedUrl }),
         signal: AbortSignal.timeout(extractionTimeout),
