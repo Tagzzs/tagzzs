@@ -116,22 +116,17 @@ export function PrivacyTab() {
   // using swr library to poll if extension connections
   // Function to fetch with auth header
   const authorizedFetcher = async (url: string) => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token;
-
     const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`, {
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
+      credentials: "include", // Important for HttpOnly cookies
     });
     return res.json();
   };
 
   const { data, error, isLoading } = useSWR(
-    user ? "/api/extension-data/connections" : null,
+    user ? "/api/extension/connections" : null,
     authorizedFetcher,
     {
       refreshInterval: 3000,
@@ -190,19 +185,14 @@ export function PrivacyTab() {
 
   const handleDisconnect = async (connectionId: string) => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/extension-data/connections?id=${connectionId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/extension/connections?id=${connectionId}`,
         {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
+          credentials: "include",
         }
       );
 
@@ -218,11 +208,10 @@ export function PrivacyTab() {
 
       // Refresh data
       const dataResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/extension-data/connections`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/extension/connections`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: {},
+          credentials: "include",
         }
       );
       if (dataResponse.ok) {

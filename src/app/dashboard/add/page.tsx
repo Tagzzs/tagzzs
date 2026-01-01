@@ -115,20 +115,14 @@ export default function AddContentPage() {
     setExtractionError(null);
 
     try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/extract-refine/`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
+          credentials: "include", // Important for HttpOnly cookies
           body: JSON.stringify({
             url: formData.url,
           }),
@@ -246,12 +240,6 @@ export default function AddContentPage() {
 
     for (const tagName of tagNames) {
       try {
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
-
         // First, try to find existing tag
         const checkResponse = await fetch(
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`,
@@ -259,8 +247,8 @@ export default function AddContentPage() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
             },
+            credentials: "include",
             body: JSON.stringify({
               tagName: tagName.trim(),
             }),
@@ -291,8 +279,8 @@ export default function AddContentPage() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
             },
+            credentials: "include",
             body: JSON.stringify({
               tagName: tagName.trim(),
               colorCode: randomColor,
@@ -356,20 +344,14 @@ export default function AddContentPage() {
         contentData.thumbnailUrl = formData.thumbnailUrl;
       }
 
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const contentResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/add`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
+          credentials: "include",
           body: JSON.stringify(contentData),
         }
       );
@@ -433,17 +415,11 @@ export default function AddContentPage() {
 
       setUploadProgress("Uploading file...");
 
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
           body: formData,
         }
       );
@@ -501,17 +477,11 @@ export default function AddContentPage() {
 
       setThumbnailUploadProgress("Uploading thumbnail...");
 
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
           body: formDataPayload,
         }
       );

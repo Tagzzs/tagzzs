@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Dict, Any
 from urllib.parse import urlparse
 from fastapi.responses import JSONResponse
-from app.services.token_verifier import get_current_user
+from app.api.dependencies import get_current_user
 from app.utils.supabase.auth import create_auth_error
 
 router = APIRouter(tags=["refinement"])
@@ -370,10 +370,9 @@ async def post_extract(req: Request):
         )
 
 
-@router.post("/extract-refine")  
+@router.post("/extract-refine")
 async def extract_and_refine_auto(
-    request: dict, 
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    request: dict, current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Universal Extract & Refine Pipeline: Auto-detect content type → Extract → Summarize → Tag
@@ -383,7 +382,7 @@ async def extract_and_refine_auto(
     try:
         if not current_user:
             return create_auth_error("Authentication required to update profile")
-        
+
         if "url" not in request or not request["url"]:
             raise ValueError("Missing required field: url")
 
@@ -413,12 +412,21 @@ async def extract_and_refine_auto(
 
         # Route to appropriate extractor
         if content_type == "youtube":
-            from app.utils.supabase.supabase_client import supabase # globally initialized supabase client
-            response = supabase.table("extraction_queue").insert({
-                "video_url": url,
-                "user_id": current_user['id'], 
-                "status": "pending"
-            }).execute()
+            from app.utils.supabase.supabase_client import (
+                supabase,
+            )  # globally initialized supabase client
+
+            response = (
+                supabase.table("extraction_queue")
+                .insert(
+                    {
+                        "video_url": url,
+                        "user_id": current_user["id"],
+                        "status": "pending",
+                    }
+                )
+                .execute()
+            )
 
             if not response.data:
                 raise ValueError("Failed to add YouTube request to queue")
@@ -426,9 +434,9 @@ async def extract_and_refine_auto(
             return {
                 "status": "queued",
                 "message": "YouTube processing started in background",
-                "queue_id": response.data[0]["id"]
+                "queue_id": response.data[0]["id"],
             }
-        
+
         elif content_type == "pdf":
             from app.services.extractors.pdf.orchestrator import (
                 extract_pdf_content_orchestrated,

@@ -8,7 +8,13 @@ import { signInSchema } from "@/lib/validation/authSchemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -30,11 +36,11 @@ export default function SignInPage() {
   const { toast } = useToast();
 
   // Detect if sign-in is from extension
-  const isExtensionAuth = searchParams.get('source') === 'extension';
+  const isExtensionAuth = searchParams.get("source") === "extension";
 
   // Get messages from URL parameters
-  const message = searchParams.get('message');
-  const error = searchParams.get('error');
+  const message = searchParams.get("message");
+  const error = searchParams.get("error");
 
   useEffect(() => {
     // Show success message if present
@@ -65,7 +71,7 @@ export default function SignInPage() {
       // Validate input
       const result = signInSchema.safeParse({
         email,
-        password
+        password,
       });
 
       if (!result.success) {
@@ -76,83 +82,93 @@ export default function SignInPage() {
       }
 
       // Call the API route for sign in
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-in`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: result.data.email,
-          password: result.data.password,
-        }),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-in`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include", // Important for HttpOnly cookies
+          body: JSON.stringify({
+            email: result.data.email,
+            password: result.data.password,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        
         // Handle API errors with specific messages
         if (data.error?.details) {
           setErrors(data.error.details || {});
         }
-        
+
         // Customize toast message based on error code
         let errorTitle = "Sign In Failed";
-        let errorDescription = data.error?.message || "An error occurred during sign in.";
-        
+        let errorDescription =
+          data.error?.message || "An error occurred during sign in.";
+
         switch (data.error?.code) {
           case "USER_NOT_FOUND":
             errorTitle = "User Not Found";
-            errorDescription = "This account doesn't exist. Please sign up to create an account.";
-            
+            errorDescription =
+              "This account doesn't exist. Please sign up to create an account.";
+
             toast({
               title: errorTitle,
               description: errorDescription,
               variant: "destructive",
             });
-            
+
             // Prompt user to sign up
             setTimeout(() => {
-              const shouldRedirect = window.confirm("This account doesn't exist. Would you like to create a new account?");
+              const shouldRedirect = window.confirm(
+                "This account doesn't exist. Would you like to create a new account?"
+              );
               if (shouldRedirect) {
-                router.push('/auth/sign-up');
+                router.push("/auth/sign-up");
               }
             }, 1500);
             break;
-            
+
           case "INVALID_CREDENTIALS":
             errorTitle = "Invalid Credentials";
-            errorDescription = "The email or password you entered is incorrect. Please try again.";
-            
+            errorDescription =
+              "The email or password you entered is incorrect. Please try again.";
+
             toast({
               title: errorTitle,
               description: errorDescription,
               variant: "destructive",
             });
             break;
-            
+
           case "EMAIL_NOT_CONFIRMED":
             errorTitle = "Email Not Verified";
-            errorDescription = "Please check your email and click the verification link to activate your account.";
-            
+            errorDescription =
+              "Please check your email and click the verification link to activate your account.";
+
             toast({
               title: errorTitle,
               description: errorDescription,
               variant: "destructive",
             });
             break;
-            
+
           case "RATE_LIMIT_EXCEEDED":
             errorTitle = "Too Many Attempts";
-            errorDescription = "Too many sign-in attempts. Please wait a moment before trying again.";
-            
+            errorDescription =
+              "Too many sign-in attempts. Please wait a moment before trying again.";
+
             toast({
               title: errorTitle,
               description: errorDescription,
               variant: "destructive",
             });
             break;
-            
+
           default:
             toast({
               title: errorTitle,
@@ -162,27 +178,13 @@ export default function SignInPage() {
             break;
         }
       } else {
-        const { createClient: createBrowserClient } = await import("@/utils/supabase/client");
-        const supabase = createBrowserClient();
-
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: data.data.session.accessToken,
-          refresh_token: data.data.session.refreshToken,
-        });
-
-        if (sessionError) {
-          toast({
-            title: "Session Error",
-            description: "Failed to establish a local session. Please try again.",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-          return;
-        }
+        // Successful sign-in
+        // No need to set session manually, cookies are handled by browser
 
         toast({
           title: "Welcome back!",
-          description: data.data?.message || "You have been signed in successfully.",
+          description:
+            data.data?.message || "You have been signed in successfully.",
           variant: "default",
         });
 
@@ -190,13 +192,15 @@ export default function SignInPage() {
 
         // Redirect based on source
         if (isExtensionAuth) {
-          router.push('/dashboard/settings?tab=privacy&action=connect-extension');
+          router.push(
+            "/dashboard/settings?tab=privacy&action=connect-extension"
+          );
         } else {
-          router.push('/dashboard');
+          router.push("/dashboard");
         }
       }
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error("Sign in error:", error);
       toast({
         title: "Error",
         description: "An unexpected error occurred. Please try again.",
@@ -220,12 +224,19 @@ export default function SignInPage() {
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
           <div className="relative z-10 text-center">
             <div className="mx-auto mb-4 bg-white p-2 rounded-full inline-block">
-              <Image src="/logo.png" alt="Tagzs logo" width={96} height={96} className="block" />
+              <Image
+                src="/logo.png"
+                alt="Tagzs logo"
+                width={96}
+                height={96}
+                className="block"
+              />
             </div>
             {/* Welcome Text */}
             <h1 className="text-4xl font-bold mb-4">Welcome to Tagzzs</h1>
             <p className="text-xl text-violet-100 max-w-md">
-              Congratulations on your first step towards the world of Digital Organization
+              Congratulations on your first step towards the world of Digital
+              Organization
             </p>
           </div>
         </div>
@@ -251,7 +262,9 @@ export default function SignInPage() {
 
             <Card className="border-0 shadow-lg">
               <CardHeader className="text-center pb-4">
-                <CardTitle className="text-2xl text-gray-800">Welcome Back</CardTitle>
+                <CardTitle className="text-2xl text-gray-800">
+                  Welcome Back
+                </CardTitle>
                 <CardDescription className="text-gray-600">
                   Enter your details to sign in to your account
                 </CardDescription>
@@ -261,25 +274,39 @@ export default function SignInPage() {
                 <form onSubmit={handleSignIn} className="space-y-4">
                   {/* Email Field */}
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-violet-600 font-medium">Email</Label>
+                    <Label
+                      htmlFor="email"
+                      className="text-violet-600 font-medium"
+                    >
+                      Email
+                    </Label>
                     <Input
                       id="email"
                       type="email"
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className={`border-gray-200 focus:border-violet-500 focus:ring-violet-500 ${errors.email ? "border-destructive" : ""}`}
+                      className={`border-gray-200 focus:border-violet-500 focus:ring-violet-500 ${
+                        errors.email ? "border-destructive" : ""
+                      }`}
                       disabled={isLoading}
                     />
                     {errors.email && (
-                      <p className="text-sm text-destructive">{errors.email[0]}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.email[0]}
+                      </p>
                     )}
                   </div>
 
                   {/* Password Field */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="password" className="text-violet-600 font-medium">Password</Label>
+                      <Label
+                        htmlFor="password"
+                        className="text-violet-600 font-medium"
+                      >
+                        Password
+                      </Label>
                       <Link
                         href="/auth/forgot-password"
                         className="text-sm text-violet-600 hover:underline"
@@ -294,7 +321,9 @@ export default function SignInPage() {
                         placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className={`pr-10 border-gray-200 focus:border-violet-500 focus:ring-violet-500 ${errors.password ? "border-destructive" : ""}`}
+                        className={`pr-10 border-gray-200 focus:border-violet-500 focus:ring-violet-500 ${
+                          errors.password ? "border-destructive" : ""
+                        }`}
                         disabled={isLoading}
                       />
                       <button
@@ -310,14 +339,16 @@ export default function SignInPage() {
                       </button>
                     </div>
                     {errors.password && (
-                      <p className="text-sm text-destructive">{errors.password[0]}</p>
+                      <p className="text-sm text-destructive">
+                        {errors.password[0]}
+                      </p>
                     )}
                   </div>
 
                   {/* Sign In Button */}
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-[#6f42d9] hover:bg-violet-700 text-white py-3 font-medium" 
+                  <Button
+                    type="submit"
+                    className="w-full bg-[#6f42d9] hover:bg-violet-700 text-white py-3 font-medium"
                     disabled={isLoading || isRedirecting || !email || !password}
                   >
                     {isLoading ? (
@@ -376,8 +407,12 @@ export default function SignInPage() {
                     className="opacity-50 cursor-not-allowed border-gray-200"
                     disabled={true}
                   >
-                    <svg className="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    <svg
+                      className="mr-2 h-4 w-4"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
                     </svg>
                     GitHub
                   </Button>
