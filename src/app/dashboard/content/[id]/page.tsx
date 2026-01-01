@@ -408,7 +408,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
   return (
     <>
-      <div style={{ backgroundColor: '#f6f3ff' }} className="pt-3">
+      <div style={{ backgroundColor: '#f6f3ff' }} className="min-h-screen pt-3 pb-8">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Back button with Navigation */}
           <div className="flex items-center justify-between mb-6">
