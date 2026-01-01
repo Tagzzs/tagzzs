@@ -13,14 +13,12 @@ import { ExternalLink, Edit, Save, X, Calendar, Clock, Tag, FileText, Video, Lin
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { marked } from 'marked'
-import Image from "next/image"
-import { createClient } from '@/utils/supabase/client'
 
-
+import { ContentPreview } from "@/components/ContentPreview"
 // Configure marked for safe HTML output
 marked.setOptions({
-  breaks: true, 
-  gfm: true,   
+  breaks: true, // Convert line breaks to <br>
+  gfm: true,    // GitHub Flavored Markdown
 })
 
 // Function to convert markdown to HTML safely
@@ -39,11 +37,11 @@ interface ContentItem {
   description: string;
   link: string;
   contentType: string;
-  tagsId: string[]; 
+  tagsId: string[]; // Updated to support multiple tags
   personalNotes: string;
   createdAt: string;
   updatedAt: string;
-  thumbnailUrl?: string; 
+  thumbnailUrl?: string; // Optional thumbnail URL
 }
 
 interface TagItem {
@@ -63,8 +61,8 @@ interface ContentDetailPageProps {
 export default function ContentDetailPage({ params }: ContentDetailPageProps) {
   const router = useRouter()
   const [contentItem, setContentItem] = useState<ContentItem | null>(null)
-  const [allContent, setAllContent] = useState<ContentItem[]>([]) 
-  const [tags, setTags] = useState<TagItem[]>([]) 
+  const [allContent, setAllContent] = useState<ContentItem[]>([]) // Store all content for navigation
+  const [tags, setTags] = useState<TagItem[]>([]) // Changed from single tag to array of tags
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -78,16 +76,11 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       setIsLoading(true)
       setError(null)
 
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
       // Fetch content data
-      const contentResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
+      const contentResponse = await fetch('/api/user-database/content/get', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({})
       })
@@ -115,11 +108,10 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
       // Fetch tag data if content has tags
       if (item.tagsId && item.tagsId.length > 0) {
-        const tagsResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
+        const tagsResponse = await fetch('/api/user-database/tags/get', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({})
         })
@@ -240,24 +232,13 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
     try {
       setIsSaving(true)
 
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const { data: { user } } = await supabase.auth.getUser()
-      const token = session?.access_token
-
-      if(!user) {
-        console.log("Authentication Error. Sign-in and try again.")
-      }
-            
       // Make API call to update content notes
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/edit`, {
+      const response = await fetch('/api/user-database/content/edit', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          userId: user!.id,
           contentId: contentItem.id,
           personalNotes: editedNotes
         })
@@ -274,10 +255,11 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       }
 
       // Update local state with the returned data
-      setContentItem({...result.data, id: contentItem.id})
+      setContentItem(result.data)
       setIsEditing(false)
     } catch (error) {
       console.error('Error saving notes:', error)
+      // TODO: Add toast notification for error
       alert(`Failed to save notes: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsSaving(false)
@@ -295,16 +277,11 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
     try {
       setIsDeleting(true)
 
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      
       // Make API call to delete content
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/delete`, {
+      const response = await fetch('/api/user-database/content/delete', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           contentId: contentItem.id
@@ -325,6 +302,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       router.push('/dashboard/memory-space')
     } catch (error) {
       console.error('Error deleting content:', error)
+      // TODO: Add toast notification for error
       alert(`Failed to delete content: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsDeleting(false)
@@ -341,7 +319,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
             Back to memory-space
           </Button>
         </div>
-        
+
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
@@ -381,7 +359,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
             Back to memory-space
           </Button>
         </div>
-        
+
         <Card>
           <CardContent className="p-12 text-center">
             <FileText className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -411,7 +389,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
             Back to memory-space
           </Button>
         </div>
-        
+
         <Card>
           <CardContent className="p-12 text-center">
             <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -430,276 +408,252 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
   return (
     <>
-    <div style={{ backgroundColor: '#f6f3ff'}} className="pt-3">
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Back button with Navigation */}
-      <div className="flex items-center justify-between mb-6">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/memory-space')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to memory-space
-        </Button>
-
-        {/* Navigation Arrows */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={navigateToPrevious}
-            disabled={!hasPrevious()}
-            className="h-9 w-9 border-[#7C3AED] text-[#7C3AED] hover:bg-[#F5F3FF] disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Previous content"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-sm text-gray-600 dark:text-gray-300 min-w-[60px] text-center">
-            {getCurrentIndex() + 1} of {allContent.length}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={navigateToNext}
-            disabled={!hasNext()}
-            className="h-9 w-9 border-[#7C3AED] text-[#7C3AED] hover:bg-[#F5F3FF] disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Next content"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <Badge variant="secondary" className={getTypeColor(contentItem.contentType)}>
-              {getTypeIcon(contentItem.contentType)}
-              <span className="ml-1 capitalize">{contentItem.contentType}</span>
-            </Badge>
-            <span className="text-sm text-gray-500">Added {formatDate(contentItem.createdAt)}</span>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{contentItem.title}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href={ensureAbsoluteUrl(contentItem.link)} target="_blank">
-            <Button variant="outline" size="sm">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              View Original
+      <div style={{ backgroundColor: '#f6f3ff' }} className="pt-3">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Back button with Navigation */}
+          <div className="flex items-center justify-between mb-6">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/memory-space')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to memory-space
             </Button>
-          </Link>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setIsEditing(!isEditing)}
-            disabled={isSaving}
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            {isEditing ? "Cancel" : "Edit Notes"}
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Content</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete this content? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction 
-                  onClick={handleDelete}
-                  className="bg-red-600 hover:bg-red-700"
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content */}
-        <div className="lg:col-span-2">
-          <Tabs defaultValue="content" className="w-full">
-            <TabsList>
-              <TabsTrigger value="content">Content</TabsTrigger>
-              <TabsTrigger value="preview">Preview</TabsTrigger>
-            </TabsList>
-            <TabsContent value="content">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Content</CardTitle>
-                  <CardDescription>Formatted content with markdown support</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div 
-                    className="prose dark:prose-invert max-w-none"
-                    dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(contentItem.description) }}
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="preview">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Preview</CardTitle>
-                  <CardDescription>
-                    {contentItem.thumbnailUrl ? ' ' : 'No thumbnail available'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {contentItem.thumbnailUrl ? (
-                    <div className="space-y-4">
-                      <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-md">
-                        <div className="relative w-full h-96">
-                          <Image
-                            src={contentItem.thumbnailUrl || ''}
-                            alt={contentItem.title || 'thumbnail'}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 1024px) 100vw, 700px"
-                            onError={(e) => {
-                              console.error('Failed to load thumbnail:', contentItem.thumbnailUrl);
-                              (e.currentTarget as HTMLImageElement).src =
-                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23f3f4f6" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="18" font-family="system-ui"%3EThumbnail failed to load%3C/text%3E%3C/svg%3E';
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border rounded-lg p-8 bg-gray-50 dark:bg-gray-800 text-center">
-                      <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                        No Thumbnail Available
-                      </h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">
-                        This content doesn't have a thumbnail.
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Tags */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Tag className="h-4 w-4" />
-                Tags
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {tags.length > 0 ? (
-                  tags.map((tag) => (
-                    <Badge 
-                      key={tag.id}
-                      variant="outline" 
-                      style={{ backgroundColor: `${tag.tagColor}20`, borderColor: tag.tagColor }}
-                      className="cursor-pointer hover:opacity-80"
-                      onClick={() => router.push(`/dashboard/memory-space?tag=${encodeURIComponent(tag.tagName)}`)}
-                    >
-                      {tag.tagName}
-                    </Badge>
-                  ))
-                ) : (
-                  <p className="text-sm text-gray-500">No tags assigned</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Notes */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Personal Notes</CardTitle>
-              <CardDescription>Your thoughts and key takeaways</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!isEditing ? (
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  {contentItem.personalNotes ? (
-                    <div 
-                      className="prose prose-sm dark:prose-invert max-w-none"
-                      dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(contentItem.personalNotes) }}
-                    />
-                  ) : (
-                    <p className="text-gray-500 italic">No notes added yet.</p>
-                  )}
-                </div>
-              ) : (
-                <Textarea
-                  value={editedNotes}
-                  onChange={(e) => setEditedNotes(e.target.value)}
-                  placeholder="Add your notes, thoughts, or key takeaways..."
-                  rows={6}
-                  disabled={isSaving}
-                />
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Metadata */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span>Added {formatDate(contentItem.createdAt)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Clock className="h-4 w-4 text-gray-500" />
-                <span>Updated {formatDate(contentItem.updatedAt)}</span>
-              </div>
-              <Separator />
-              <div className="text-xs text-gray-500">
-                <p>Source: {new URL(ensureAbsoluteUrl(contentItem.link)).hostname}</p>
-                <p className="mt-1">Content Type: {contentItem.contentType}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Actions */}
-          {isEditing && (
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleSave} 
-                className="flex-1"
-                disabled={isSaving}
+            {/* Navigation Arrows */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={navigateToPrevious}
+                disabled={!hasPrevious()}
+                className="h-9 w-9 border-[#7C3AED] text-[#7C3AED] hover:bg-[#F5F3FF] disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Previous content"
               >
-                <Save className="h-4 w-4 mr-2" />
-                {isSaving ? "Saving..." : "Save Changes"}
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={handleCancel}
-                disabled={isSaving}
+              <span className="text-sm text-gray-600 dark:text-gray-300 min-w-[60px] text-center">
+                {getCurrentIndex() + 1} of {allContent.length}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={navigateToNext}
+                disabled={!hasNext()}
+                className="h-9 w-9 border-[#7C3AED] text-[#7C3AED] hover:bg-[#F5F3FF] disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Next content"
               >
-                <X className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-          )}
+          </div>
+
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="secondary" className={getTypeColor(contentItem.contentType)}>
+                  {getTypeIcon(contentItem.contentType)}
+                  <span className="ml-1 capitalize">{contentItem.contentType}</span>
+                </Badge>
+                <span className="text-sm text-gray-500">Added {formatDate(contentItem.createdAt)}</span>
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{contentItem.title}</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href={ensureAbsoluteUrl(contentItem.link)} target="_blank">
+                <Button variant="outline" size="sm">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Original
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditing(!isEditing)}
+                disabled={isSaving}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                {isEditing ? "Cancel" : "Edit Notes"}
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Content</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete this content? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-red-600 hover:bg-red-700"
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Content */}
+            <div className="lg:col-span-2">
+              <Tabs defaultValue="content" className="w-full">
+                <TabsList>
+                  <TabsTrigger value="content">Content</TabsTrigger>
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                </TabsList>
+                <TabsContent value="content">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Content</CardTitle>
+                      <CardDescription>Formatted content with markdown support</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div
+                        className="prose dark:prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(contentItem.description) }}
+                      />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                <TabsContent value="preview">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Preview</CardTitle>
+                      <CardDescription>
+                        {contentItem.contentType === 'link' ? 'Website Preview' : 'Content Preview'}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ContentPreview
+                        url={ensureAbsoluteUrl(contentItem.link)}
+                        fileName={contentItem.title}
+                        title={contentItem.title}
+                        description={contentItem.description}
+                        thumbnailUrl={contentItem.thumbnailUrl}
+                        className="w-full"
+                      />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-6">
+              {/* Tags */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Tag className="h-4 w-4" />
+                    Tags
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {tags.length > 0 ? (
+                      tags.map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          variant="outline"
+                          style={{ backgroundColor: `${tag.tagColor}20`, borderColor: tag.tagColor }}
+                          className="cursor-pointer hover:opacity-80"
+                          onClick={() => router.push(`/dashboard/memory-space?tag=${encodeURIComponent(tag.tagName)}`)}
+                        >
+                          {tag.tagName}
+                        </Badge>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500">No tags assigned</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Notes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Personal Notes</CardTitle>
+                  <CardDescription>Your thoughts and key takeaways</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!isEditing ? (
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                      {contentItem.personalNotes ? (
+                        <div
+                          className="prose prose-sm dark:prose-invert max-w-none"
+                          dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(contentItem.personalNotes) }}
+                        />
+                      ) : (
+                        <p className="text-gray-500 italic">No notes added yet.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <Textarea
+                      value={editedNotes}
+                      onChange={(e) => setEditedNotes(e.target.value)}
+                      placeholder="Add your notes, thoughts, or key takeaways..."
+                      rows={6}
+                      disabled={isSaving}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Metadata */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    <span>Added {formatDate(contentItem.createdAt)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="h-4 w-4 text-gray-500" />
+                    <span>Updated {formatDate(contentItem.updatedAt)}</span>
+                  </div>
+                  <Separator />
+                  <div className="text-xs text-gray-500">
+                    <p>Source: {new URL(ensureAbsoluteUrl(contentItem.link)).hostname}</p>
+                    <p className="mt-1">Content Type: {contentItem.contentType}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Actions */}
+              {isEditing && (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSave}
+                    className="flex-1"
+                    disabled={isSaving}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSaving ? "Saving..." : "Save Changes"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleCancel}
+                    disabled={isSaving}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-    </div>
     </>
   )
 }
