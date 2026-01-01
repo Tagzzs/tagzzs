@@ -82,7 +82,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <AuthProvider>
-          <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+          <ThemeProvider attribute="class" forcedTheme="light" disableTransitionOnChange>
             {children}
           </ThemeProvider>
         </AuthProvider>
