@@ -10,11 +10,11 @@ interface ApiOptions {
 }
 
 export function useAuthenticatedApi() {
-  const { session } = useAuth()
+  const { user } = useAuth()
   const { toast } = useToast()
 
   const callApi = async (endpoint: string, options: ApiOptions = {}) => {
-    if (!session) {
+    if (!user) {
       toast({
         title: 'Authentication Required',
         description: 'Please sign in to continue',
@@ -30,9 +30,9 @@ export function useAuthenticatedApi() {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
           ...headers,
         },
+        credentials: 'include',
         body: body ? JSON.stringify(body) : undefined,
       })
 
@@ -91,7 +91,7 @@ export function useAuthenticatedApi() {
     put,
     delete: del,
     patch,
-    isAuthenticated: !!session,
+    isAuthenticated: !!user,
   }
 }
 

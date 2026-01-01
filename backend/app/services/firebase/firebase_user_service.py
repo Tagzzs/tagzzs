@@ -1,10 +1,7 @@
-from numbers import Number
 
-import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import firestore
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-import os
 from app.services.firebase.firebase_admin_setup import admin_db as db
 
 

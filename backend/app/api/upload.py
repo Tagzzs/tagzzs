@@ -1,10 +1,10 @@
-import os
 import re
 import time
 from typing import Dict, Any
 from fastapi import APIRouter, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
 from app.utils.supabase.supabase_client import supabase
+from pydantic import BaseModel, HttpUrl
 
 # Internal imports
 from app.api.dependencies import get_current_user
@@ -77,7 +77,7 @@ async def upload_file(
             unique_file_name = f"{timestamp}_{sanitized_name}"
 
         # Upload to Supabase Storage
-        upload_response = supabase.storage.from_(bucket_name).upload(
+        supabase.storage.from_(bucket_name).upload(
             path=unique_file_name,
             file=file_content,
             file_options={"content-type": file.content_type, "upsert": "false"},
@@ -106,9 +106,6 @@ async def upload_file(
             status_code=500,
             content={"error": "Internal server error", "details": str(e)},
         )
-
-
-from pydantic import BaseModel, HttpUrl
 
 
 class UploadFromUrlSchema(BaseModel):
