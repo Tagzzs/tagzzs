@@ -7,7 +7,13 @@ import { signUpSchema } from "@/lib/validation/authSchemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +45,7 @@ export default function SignUpPage() {
     if (email.length > 0) {
       const emailSchema = signUpSchema.shape.email;
       const result = emailSchema.safeParse(email);
-      
+
       if (!result.success) {
         setEmailError(result.error.issues[0]?.message || "Invalid email");
       } else {
@@ -55,7 +61,7 @@ export default function SignUpPage() {
     if (fullName.length > 0) {
       const nameSchema = signUpSchema.shape.name;
       const result = nameSchema.safeParse(fullName);
-      
+
       if (!result.success) {
         setNameError(result.error.issues[0]?.message || "Invalid name");
       } else {
@@ -71,9 +77,9 @@ export default function SignUpPage() {
     if (password.length > 0) {
       const passwordSchema = signUpSchema.shape.password;
       const result = passwordSchema.safeParse(password);
-      
+
       if (!result.success) {
-        setPasswordErrors(result.error.issues.map(issue => issue.message));
+        setPasswordErrors(result.error.issues.map((issue) => issue.message));
       } else {
         setPasswordErrors([]);
       }
@@ -114,21 +120,24 @@ export default function SignUpPage() {
         setIsLoading(false);
         return;
       }
-        
 
       // Call the API route for sign up
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-up`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: fullName,
-          email,
-          password,
-          confirmPassword,
-        }),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-up`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include", // Important for HttpOnly cookies
+          body: JSON.stringify({
+            name: fullName,
+            email,
+            password,
+            confirmPassword,
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -137,7 +146,7 @@ export default function SignUpPage() {
           // Handle validation errors from the API
           setErrors(data.error.details || {});
         }
-        
+
         toast({
           title: "Error",
           description: data.error?.message || "Failed to create account",
@@ -146,15 +155,9 @@ export default function SignUpPage() {
         return;
       }
 
-      if (data.data?.session) {
-        const { createClient: createBrowserClient } = await import("@/utils/supabase/client");
-        const supabase = createBrowserClient();
-
-        // Manually setting cookies
-        await supabase.auth.setSession({
-          access_token: data.data.session.accessToken,
-          refresh_token: data.data.session.refreshToken,
-        });
+      // Check for success message or data, session cookie is set automatically
+      if (data.success) {
+        // No manual session setting needed
 
         toast({
           title: "Account Created",
@@ -162,24 +165,25 @@ export default function SignUpPage() {
           variant: "default",
         });
 
-        router.refresh(); 
-        router.push('/dashboard');
+        router.refresh();
+        router.push("/dashboard");
       } else {
         // TODO: Set email confirmation first
         toast({
           title: "Verify your Email",
-          description: data.data?.message || "Please check your email to verify your account.",
+          description:
+            data.data?.message ||
+            "Please check your email to verify your account.",
           variant: "default",
         });
 
         // Redirect to sign-in page instead of dashboard
         setTimeout(() => {
-          router.push('/auth/sign-in');
+          router.push("/auth/sign-in");
         }, 3000);
       }
-
     } catch (error) {
-      console.error('Sign up error:', error);
+      console.error("Sign up error:", error);
       toast({
         title: "Error",
         description: "An unexpected error occurred. Please try again.",

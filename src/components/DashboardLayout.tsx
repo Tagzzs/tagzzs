@@ -5,9 +5,14 @@ import { StatsCards } from "./StatsCards";
 import RecentlyAdded from "./RecentlyAdded";
 import { CalendarWidget } from "@/components/CalendarWidget";
 import { Box, CssBaseline, Container } from "@mui/material";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import { CalendarDays } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 
 interface ContentItem {
   id: string;
@@ -41,38 +46,49 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [content, setContent] = useState<ContentItem[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
 
-  
   useEffect(() => {
     const fetchDashboardData = async () => {
       setIsLoading(true);
 
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
       try {
         const [contentRes, tagsRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}`},
-            body: JSON.stringify({}), 
-          }),
-          fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({}),
-          }),
+          fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({}),
+            }
+          ),
+          fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({}),
+            }
+          ),
         ]);
+
         if (!contentRes.ok || !tagsRes.ok) {
+          // If 401, it means cookies are missing or invalid
+          if (contentRes.status === 401 || tagsRes.status === 401) {
+            console.error("Unauthorized access to dashboard data");
+          }
           throw new Error("Failed to fetch data");
         }
+
         const contentData = await contentRes.json();
         const tagsData = await tagsRes.json();
         setContent(contentData.data || []);
         setTags(tagsData.data || []);
+      } catch (error) {
+        console.error("Dashboard fetch error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -92,61 +108,65 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Get most used tags
   const getMostUsedTags = () => {
     return tags
-      .filter(tag => tag.contentCount && tag.contentCount > 0)
+      .filter((tag) => tag.contentCount && tag.contentCount > 0)
       .sort((a, b) => (b.contentCount || 0) - (a.contentCount || 0))
-      .slice(0, 5); 
+      .slice(0, 5);
   };
 
   // Apply filtering only when filters or search are active
   const getFilteredContent = () => {
     let filtered = [...content];
-    
-    // Apply search filter if search query exists 
-    if(searchQuery.trim()){
-      filtered = filtered.filter(item => 
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.description.toLowerCase().includes(searchQuery.toLowerCase())
+
+    // Apply search filter if search query exists
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(
+        (item) =>
+          item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.description.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-    
-    if(activeFilters.length > 0) {
+
+    if (activeFilters.length > 0) {
       const currentFilter = activeFilters[0];
-      
-      filtered = filtered.filter(item => {
+
+      filtered = filtered.filter((item) => {
         const itemType = item.contentType.toLowerCase();
-        
+
         switch (currentFilter) {
-          case 'articles':
-            return itemType === 'article';
-          case 'videos':
-            return itemType === 'video';
-          case 'pdf':
-            return itemType === 'pdf';
-          case 'links':
-            return itemType === 'link';
-          case 'recent':
+          case "articles":
+            return itemType === "article";
+          case "videos":
+            return itemType === "video";
+          case "pdf":
+            return itemType === "pdf";
+          case "links":
+            return itemType === "link";
+          case "recent":
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-            const isRecent = new Date(Math.max(
-              new Date(item.createdAt).getTime(),
-              new Date(item.updatedAt).getTime()
-            )) >= oneWeekAgo;
+            const isRecent =
+              new Date(
+                Math.max(
+                  new Date(item.createdAt).getTime(),
+                  new Date(item.updatedAt).getTime()
+                )
+              ) >= oneWeekAgo;
             return isRecent;
-          case 'popular':
+          case "popular":
             const mostUsedTags = getMostUsedTags();
-            const mostUsedTagIds = mostUsedTags.map(tag => tag.id);
+            const mostUsedTagIds = mostUsedTags.map((tag) => tag.id);
 
-            return item.tagsId.some(tagId => mostUsedTagIds.includes(tagId));
+            return item.tagsId.some((tagId) => mostUsedTagIds.includes(tagId));
           default:
             return true;
         }
       });
     }
-    
+
     return filtered;
   };
 
-  const searchBarTags = tags.map(tag => ({
+  const searchBarTags = tags.map((tag) => ({
     id: tag.id,
     name: tag.tagName,
     createdAt: new Date(tag.createdAt),
@@ -157,23 +177,23 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const totalItems = content.length;
   const totalTags = tags.length;
   const filteredContent = getFilteredContent();
-  
+
   // Calculate items added this week
-  const thisWeekItems = content.filter(item => {
+  const thisWeekItems = content.filter((item) => {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     const createdDate = new Date(item.createdAt);
     return createdDate >= oneWeekAgo;
   }).length;
-  
-  const topTag =
-    tags.reduce(
-      (prev, curr) =>
-        curr.contentCount && (!prev || curr.contentCount > (prev.contentCount || 0))
-          ? curr
-          : prev,
-      null as TagItem | null
-    ) || { tagName: "", contentCount: 0 };
+
+  const topTag = tags.reduce(
+    (prev, curr) =>
+      curr.contentCount &&
+      (!prev || curr.contentCount > (prev.contentCount || 0))
+        ? curr
+        : prev,
+    null as TagItem | null
+  ) || { tagName: "", contentCount: 0 };
 
   const popularTags = tags.map((tag, index) => {
     const usesCount = tag.contentCount ?? 0;
@@ -198,11 +218,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     };
   });
 
-  const currentFilterName = activeFilters.length > 0 ? 
-    activeFilters[0].charAt(0).toUpperCase() + activeFilters[0].slice(1) : null;
+  const currentFilterName =
+    activeFilters.length > 0
+      ? activeFilters[0].charAt(0).toUpperCase() + activeFilters[0].slice(1)
+      : null;
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", backgroundColor: "#f6f3ff" }}>
+    <Box
+      sx={{ display: "flex", minHeight: "100vh", backgroundColor: "#f6f3ff" }}
+    >
       <CssBaseline />
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <Box>
@@ -214,13 +238,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </Box>
         <Container
           maxWidth="xl"
-          sx={{ 
-            flex: 1, 
-            my: { xs: 1.5, sm: 2, md: 3 }, 
-            display: "flex", 
-            gap: { xs: 2, sm: 2, md: 3 }, 
+          sx={{
+            flex: 1,
+            my: { xs: 1.5, sm: 2, md: 3 },
+            display: "flex",
+            gap: { xs: 2, sm: 2, md: 3 },
             flexWrap: "wrap",
-            px: { xs: 1, sm: 2, md: 3 }
+            px: { xs: 1, sm: 2, md: 3 },
           }}
         >
           <Box
@@ -234,14 +258,19 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             {/* Dashboard Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-6">
               <div>
-                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground mb-1">Dashboard</h1>
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground mb-1">
+                  Dashboard
+                </h1>
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   Welcome back! Here's what's happening in your Tagzs.
                   {(activeFilters.length > 0 || searchQuery.trim()) && (
                     <span className="block mt-1 text-xs">
-                      {currentFilterName === 'Popular' && (
+                      {currentFilterName === "Popular" && (
                         <span className="block text-xs text-muted-foreground/80 mt-0.5">
-                          Content with most used tags: {getMostUsedTags().map(tag => tag.tagName).join(', ')}
+                          Content with most used tags:{" "}
+                          {getMostUsedTags()
+                            .map((tag) => tag.tagName)
+                            .join(", ")}
                         </span>
                       )}
                     </span>
@@ -249,7 +278,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </p>
               </div>
             </div>
-            
+
             <StatsCards
               isLoading={isLoading}
               contentLength={totalItems}
@@ -280,8 +309,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             {showRecentlyAdded && (
               <Box sx={{ mt: 3, sm: { mt: 4 } }}>
                 <RecentlyAdded
-                  filteredContent={activeFilters.length > 0 || searchQuery.trim() ? filteredContent : undefined}
-                  isFiltered={activeFilters.length > 0 || searchQuery.trim() !== ''}
+                  filteredContent={
+                    activeFilters.length > 0 || searchQuery.trim()
+                      ? filteredContent
+                      : undefined
+                  }
+                  isFiltered={
+                    activeFilters.length > 0 || searchQuery.trim() !== ""
+                  }
                 />
               </Box>
             )}

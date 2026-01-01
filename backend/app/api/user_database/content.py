@@ -16,7 +16,7 @@ from google.cloud.firestore import Query as FirestoreQuery, FieldFilter
 # Internal imports
 from app.services.firebase.firebase_admin_setup import admin_db
 from app.services.firebase.firebase_user_service import FirebaseUserService
-from app.services.token_verifier import get_current_user
+from app.api.dependencies import get_current_user
 from app.services.tag_count_service import (
     update_multiple_tag_counts,
     update_tag_counts_on_array_change,

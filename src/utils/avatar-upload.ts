@@ -147,69 +147,52 @@ export async function uploadAvatar(
       opts.quality
     );
 
-    const fileName = generateAvatarFileName(userId, file.name);
+    const formData = new FormData();
+    formData.append("file", compressedFile);
+    formData.append("fileType", "avatar");
 
-    console.log(`[AVATAR_UPLOAD] Uploading to storage: ${fileName}`);
-    const supabase = createClient();
-
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (!session || sessionError) {
-      return {
-        success: false,
-        error: "Authentication required for avatar upload",
-      };
-    }
-
-    console.log(
-      `[AVATAR_UPLOAD] Authenticated user: ${session.user.id}, uploading as: ${userId}`
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`,
+      {
+        method: "POST",
+        credentials: "include", // Important for HttpOnly cookies
+        body: formData,
+      }
     );
 
-    if (session.user.id !== userId) {
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       return {
         success: false,
-        error: "User ID mismatch - cannot upload avatar",
+        error: errorData.error || `Upload failed with status: ${response.status}`,
       };
     }
 
-    const { data, error } = await supabase.storage
-      .from("user_avatars")
-      .upload(fileName, compressedFile, {
-        cacheControl: "3600",
-        upsert: true, 
-      });
+    const data = await response.json();
 
-    if (error) {
-      console.log(`[AVATAR_UPLOAD] Storage error: ${error}`, {
-        message: error.message,
-        fullError: error,
-      });
-
+    if (!data.success) {
       return {
         success: false,
-        error: `Upload failed: ${error.message}`,
+        error: data.error || "Unknown upload error",
       };
     }
 
-    const {
-      data: { publicUrl },
-    } = await supabase.storage.from("user_avatars").getPublicUrl(data.path);
-
+    // Backend returns { success: true, fileUrl: { publicUrl: ... }, ... }
+    const publicUrl = data.fileUrl?.publicUrl;
+    
     if (!publicUrl) {
-      return {
-        success: false,
-        error: `Failed to get public URL for uploaded avatar`,
-      };
+       return {
+         success: false,
+         error: "Failed to obtain public URL from server response",
+       };
     }
+
     console.log(`[AVATAR_UPLOAD] Successfully uploaded: ${publicUrl}`);
 
     return {
       success: true,
       url: publicUrl,
-      fileName: data.path,
+      fileName: data.fileName,
     };
   } catch (error) {
     console.log(`[AVATAR_UPLOAD] Unexpected error: ${error}`);

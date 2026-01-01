@@ -409,20 +409,14 @@ export default function LibraryPage() {
         setIsSearching(true);
         setSearchError(null);
 
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
-
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/search/semantic-query`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
             },
+            credentials: "include", // Important for HttpOnly cookies
             body: JSON.stringify({
               query: searchQuery,
               tags: selectedTags,
@@ -510,12 +504,6 @@ export default function LibraryPage() {
         }
         setError(null);
 
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
-
         // Fetch content data
         const contentResponse = await fetch(
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`,
@@ -523,8 +511,8 @@ export default function LibraryPage() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
             },
+            credentials: "include",
             body: JSON.stringify({
               sortBy: sortBy,
             }),
@@ -553,8 +541,8 @@ export default function LibraryPage() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
             },
+            credentials: "include",
             body: JSON.stringify({}),
           }
         );

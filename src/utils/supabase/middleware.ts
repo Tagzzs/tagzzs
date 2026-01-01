@@ -45,14 +45,8 @@ export async function updateSession(request: NextRequest) {
   ];
 
   // API routes that require authentication
-  const protectedApiRoutes = [
-    '/api/pdf-extractor',
-    '/api/tag-generation',
-    '/api/content',
-    '/api/tags',
-    '/api/library',
-    '/api/extension',
-    '/api/user-database', 
+  const protectedApiRoutes: string[] = [
+    // '/api/embed', // Example if needed
   ];
 
   // Check if current route is public
