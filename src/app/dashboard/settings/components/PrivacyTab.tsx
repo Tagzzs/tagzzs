@@ -1,25 +1,50 @@
-'use client'
+"use client";
 
-import useSWR from 'swr';
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ChevronDown, ChevronRight, MoreVertical, Chrome, Activity, Unlink2, Lock, Eye, EyeOff, AlertCircle, CheckCircle, Loader2, Mail } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
-import { createClient } from '@/utils/supabase/client'
-import { db } from '@/lib/firebase/client'; 
-import { collection, onSnapshot, query, orderBy, doc} from 'firebase/firestore';
+import useSWR from "swr";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  ChevronDown,
+  ChevronRight,
+  MoreVertical,
+  Chrome,
+  Activity,
+  Unlink2,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  Mail,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { createClient } from "@/utils/supabase/client";
+// firebase imports removed
 
 interface ExtensionConnection {
   id: string;
   deviceName: string;
-  status: 'active' | 'disconnected';
+  status: "active" | "disconnected";
   isActive: boolean;
   lastActivity?: Date;
   lastHeartbeat?: Date;
@@ -49,27 +74,30 @@ interface ExtensionData {
 }
 
 export function PrivacyTab() {
-  const [showPreviousConnections, setShowPreviousConnections] = useState(false)
-  const [isConnectionDetailsOpen, setIsConnectionDetailsOpen] = useState(false)
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false)
-  const [selectedConnection, setSelectedConnection] = useState<ExtensionConnection | null>(null)
-  
-  // Extension data
-  const [extensionData, setExtensionData] = useState<ExtensionData | null>(null)
-  const [isLoadingExtensions, setIsLoadingExtensions] = useState(true)
-  const [extensionError, setExtensionError] = useState<string | null>(null)
-  
-  // Change Password Form State
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isChangingPassword, setIsChangingPassword] = useState(false)
-  const [passwordError, setPasswordError] = useState('')
+  const [showPreviousConnections, setShowPreviousConnections] = useState(false);
+  const [isConnectionDetailsOpen, setIsConnectionDetailsOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [selectedConnection, setSelectedConnection] =
+    useState<ExtensionConnection | null>(null);
 
-  const router = useRouter()
-  const { toast } = useToast()
-  const supabase = createClient()
+  // Extension data
+  const [extensionData, setExtensionData] = useState<ExtensionData | null>(
+    null
+  );
+  const [isLoadingExtensions, setIsLoadingExtensions] = useState(true);
+  const [extensionError, setExtensionError] = useState<string | null>(null);
+
+  // Change Password Form State
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+
+  const router = useRouter();
+  const { toast } = useToast();
+  const supabase = createClient();
 
   // Adding user state
   const [user, setUser] = useState<any>(null);
@@ -77,22 +105,32 @@ export function PrivacyTab() {
   // Get user session on load from supabase
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setUser(user);
     };
     getUser();
   }, [supabase.auth]);
 
-  
-  const fetcher = (url: string) => fetch(url).then((res) => res.json());
+  // using swr library to poll if extension connections
+  // Function to fetch with auth header
+  const authorizedFetcher = async (url: string) => {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include", // Important for HttpOnly cookies
+    });
+    return res.json();
+  };
 
-  // using swr libary to poll if extension connections
   const { data, error, isLoading } = useSWR(
-    user ? '/api/extension-data/connections' : null,
-    fetcher,
-    { 
-      refreshInterval: 3000, // Polls every 3 seconds
-      revalidateOnFocus: true 
+    user ? "/api/extension/connections" : null,
+    authorizedFetcher,
+    {
+      refreshInterval: 3000,
+      revalidateOnFocus: true,
     }
   );
 
@@ -107,152 +145,171 @@ export function PrivacyTab() {
     }
   }, [data, error]);
 
-
-  const formatDate = (date: Date | { toDate?: () => Date } | null | undefined) => {
-    if (!date) return 'Never'
+  const formatDate = (
+    date: Date | { toDate?: () => Date } | null | undefined
+  ) => {
+    if (!date) return "Never";
     try {
-      const dateObj = (date as { toDate?: () => Date }).toDate?.() || new Date(date as unknown as string)
-      return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(dateObj)
+      const dateObj =
+        (date as { toDate?: () => Date }).toDate?.() ||
+        new Date(date as unknown as string);
+      return new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(dateObj);
     } catch {
-      return 'Unknown'
+      return "Unknown";
     }
-  }
+  };
 
   const getActiveConnections = () => {
-    if (!extensionData?.connections) return []
-    return extensionData.connections.filter(c => c.status === 'active' || c.isActive)
-  }
+    if (!extensionData?.connections) return [];
+    return extensionData.connections.filter(
+      (c) => c.status === "active" || c.isActive
+    );
+  };
 
   const getInactiveConnections = () => {
-    if (!extensionData?.connections) return []
-    return extensionData.connections.filter(c => c.status !== 'active' && !c.isActive)
-  }
+    if (!extensionData?.connections) return [];
+    return extensionData.connections.filter(
+      (c) => c.status !== "active" && !c.isActive
+    );
+  };
 
   const handleViewActivity = (connection: ExtensionConnection) => {
-    setSelectedConnection(connection)
-    setIsConnectionDetailsOpen(true)
-  }
+    setSelectedConnection(connection);
+    setIsConnectionDetailsOpen(true);
+  };
 
   const handleDisconnect = async (connectionId: string) => {
     try {
-      const response = await fetch(`/api/extension-data/connections?id=${connectionId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/extension/connections?id=${connectionId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
 
       if (!response.ok) {
-        throw new Error('Failed to disconnect extension')
+        throw new Error("Failed to disconnect extension");
       }
 
       toast({
         title: "Disconnected",
         description: "Extension connection has been removed.",
         variant: "default",
-      })
+      });
 
       // Refresh data
-      const dataResponse = await fetch('/api/extension-data/connections')
+      const dataResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/extension/connections`,
+        {
+          headers: {},
+          credentials: "include",
+        }
+      );
       if (dataResponse.ok) {
-        const result = await dataResponse.json()
+        const result = await dataResponse.json();
         if (result.success && result.data) {
-          setExtensionData(result.data)
+          setExtensionData(result.data);
         }
       }
     } catch (error) {
-      console.error('Error disconnecting:', error)
+      console.error("Error disconnecting:", error);
       toast({
         title: "Error",
         description: "Failed to disconnect extension.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleChangePasswordClick = () => {
-    setIsChangePasswordOpen(true)
-    setNewPassword('')
-    setConfirmPassword('')
-    setPasswordError('')
-  }
+    setIsChangePasswordOpen(true);
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError("");
+  };
 
   const handleForgotPasswordClick = () => {
-    router.push('/auth/forgot-password')
-  }
+    router.push("/auth/forgot-password");
+  };
 
   const validatePassword = (password: string): string | null => {
     if (password.length < 8) {
-      return 'Password must be at least 8 characters'
+      return "Password must be at least 8 characters";
     }
     if (!/[A-Z]/.test(password)) {
-      return 'Password must contain at least one uppercase letter'
+      return "Password must contain at least one uppercase letter";
     }
     if (!/[a-z]/.test(password)) {
-      return 'Password must contain at least one lowercase letter'
+      return "Password must contain at least one lowercase letter";
     }
     if (!/[0-9]/.test(password)) {
-      return 'Password must contain at least one number'
+      return "Password must contain at least one number";
     }
     if (!/[^A-Za-z0-9]/.test(password)) {
-      return 'Password must contain at least one special character'
+      return "Password must contain at least one special character";
     }
-    return null
-  }
+    return null;
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setPasswordError('')
-    setIsChangingPassword(true)
+    e.preventDefault();
+    setPasswordError("");
+    setIsChangingPassword(true);
 
     try {
       // Validate inputs
       if (!newPassword || !confirmPassword) {
-        setPasswordError('All fields are required')
-        setIsChangingPassword(false)
-        return
+        setPasswordError("All fields are required");
+        setIsChangingPassword(false);
+        return;
       }
 
       if (newPassword !== confirmPassword) {
-        setPasswordError('Passwords do not match')
-        setIsChangingPassword(false)
-        return
+        setPasswordError("Passwords do not match");
+        setIsChangingPassword(false);
+        return;
       }
 
       // Validate new password strength
-      const validationError = validatePassword(newPassword)
+      const validationError = validatePassword(newPassword);
       if (validationError) {
-        setPasswordError(validationError)
-        setIsChangingPassword(false)
-        return
+        setPasswordError(validationError);
+        setIsChangingPassword(false);
+        return;
       }
 
       // Update password directly (Supabase will handle authentication)
       const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword
-      })
+        password: newPassword,
+      });
 
       if (updateError) {
-        console.error('Password update error:', updateError)
-        
+        console.error("Password update error:", updateError);
+
         // Handle specific errors
-        if (updateError.message.includes('same')) {
-          setPasswordError('New password must be different from your current password')
-        } else if (updateError.message.includes('session')) {
-          setPasswordError('Session expired. Please sign in again.')
+        if (updateError.message.includes("same")) {
+          setPasswordError(
+            "New password must be different from your current password"
+          );
+        } else if (updateError.message.includes("session")) {
+          setPasswordError("Session expired. Please sign in again.");
           setTimeout(() => {
-            router.push('/auth/sign-in')
-          }, 2000)
+            router.push("/auth/sign-in");
+          }, 2000);
         } else {
-          setPasswordError(updateError.message || 'Failed to update password')
+          setPasswordError(updateError.message || "Failed to update password");
         }
-        setIsChangingPassword(false)
-        return
+        setIsChangingPassword(false);
+        return;
       }
 
       // Success
@@ -260,40 +317,45 @@ export function PrivacyTab() {
         title: "Password Changed",
         description: "Your password has been updated successfully.",
         variant: "default",
-      })
+      });
 
-      setIsChangePasswordOpen(false)
-      setNewPassword('')
-      setConfirmPassword('')
-
+      setIsChangePasswordOpen(false);
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (error) {
-      console.error('Change password error:', error)
-      setPasswordError('An unexpected error occurred. Please try again.')
+      console.error("Change password error:", error);
+      setPasswordError("An unexpected error occurred. Please try again.");
     } finally {
-      setIsChangingPassword(false)
+      setIsChangingPassword(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Privacy & Security</h2>
-        <p className="text-gray-600 mb-8">Manage your privacy settings and account security.</p>
-        
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          Privacy & Security
+        </h2>
+        <p className="text-gray-600 mb-8">
+          Manage your privacy settings and account security.
+        </p>
+
         {/* Account Security Section */}
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Account Security</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">
+            Account Security
+          </h3>
           <div className="flex flex-wrap gap-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300"
               onClick={handleChangePasswordClick}
             >
               <Lock className="h-4 w-4 mr-2" />
               Change Password
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300"
             >
               Enable Two-factor Authentication
@@ -303,38 +365,54 @@ export function PrivacyTab() {
 
         {/* Data Privacy Section */}
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Data Privacy</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">
+            Data Privacy
+          </h3>
           <div className="space-y-6">
             <div className="flex items-center justify-between py-2">
               <div className="flex-1">
-                <Label htmlFor="publicProfile" className="text-base font-medium text-gray-900 cursor-pointer">
+                <Label
+                  htmlFor="publicProfile"
+                  className="text-base font-medium text-gray-900 cursor-pointer"
+                >
                   Make Profile Public
                 </Label>
-                <p className="text-sm text-gray-500 mt-1">Allow others to see your public tags and content</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Allow others to see your public tags and content
+                </p>
               </div>
-              <Switch 
+              <Switch
                 id="publicProfile"
                 className="data-[state=checked]:bg-purple-600"
-                style={{
-                  '--switch-background': '#E9D5FF'
-                } as React.CSSProperties}
+                style={
+                  {
+                    "--switch-background": "#E9D5FF",
+                  } as React.CSSProperties
+                }
               />
             </div>
 
             <div className="flex items-center justify-between py-2">
               <div className="flex-1">
-                <Label htmlFor="analytics" className="text-base font-medium text-gray-900 cursor-pointer">
+                <Label
+                  htmlFor="analytics"
+                  className="text-base font-medium text-gray-900 cursor-pointer"
+                >
                   Analytics
                 </Label>
-                <p className="text-sm text-gray-500 mt-1">Help improve TagZ by sharing usage analytics</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Help improve TagZ by sharing usage analytics
+                </p>
               </div>
-              <Switch 
+              <Switch
                 id="analytics"
                 defaultChecked
                 className="data-[state=checked]:bg-purple-600"
-                style={{
-                  '--switch-background': '#E9D5FF'
-                } as React.CSSProperties}
+                style={
+                  {
+                    "--switch-background": "#E9D5FF",
+                  } as React.CSSProperties
+                }
               />
             </div>
           </div>
@@ -342,8 +420,10 @@ export function PrivacyTab() {
 
         {/* Connected Apps Section */}
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Connected Apps</h3>
-          
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">
+            Connected Apps
+          </h3>
+
           {/* Browser Extensions */}
           <div className="mb-8">
             {isLoadingExtensions ? (
@@ -353,7 +433,9 @@ export function PrivacyTab() {
               </div>
             ) : extensionError ? (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-600">Error loading extension data: {extensionError}</p>
+                <p className="text-sm text-red-600">
+                  Error loading extension data: {extensionError}
+                </p>
               </div>
             ) : extensionData ? (
               <>
@@ -363,25 +445,40 @@ export function PrivacyTab() {
                       <div className="w-2 h-2 bg-white rounded-xs"></div>
                     </div>
                   </div>
-                  <h4 className="font-semibold text-gray-900">Browser Extensions</h4>
-                  <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">
+                  <h4 className="font-semibold text-gray-900">
+                    Browser Extensions
+                  </h4>
+                  <Badge
+                    variant="secondary"
+                    className="bg-purple-100 text-purple-700 border-purple-200"
+                  >
                     {extensionData.activeCount} Connected
                   </Badge>
                 </div>
-                <p className="text-sm text-gray-500 mb-6">Manage TagZ extension connections across your devices (Max: 2)</p>
-                
+                <p className="text-sm text-gray-500 mb-6">
+                  Manage TagZ extension connections across your devices (Max: 2)
+                </p>
+
                 {/* Active Connections */}
                 {getActiveConnections().length > 0 ? (
                   <div className="space-y-3 mb-6">
                     {getActiveConnections().map((connection) => (
-                      <div key={connection.id} className="bg-purple-50 rounded-lg p-4 border border-purple-100">
+                      <div
+                        key={connection.id}
+                        className="bg-purple-50 rounded-lg p-4 border border-purple-100"
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
                             <Chrome className="h-5 w-5 text-blue-500" />
                             <div>
-                              <h5 className="font-medium text-gray-900">{connection.deviceName}</h5>
+                              <h5 className="font-medium text-gray-900">
+                                {connection.deviceName}
+                              </h5>
                               <p className="text-sm text-gray-500">
-                                Chrome • Last active {connection.lastActivity ? formatDate(connection.lastActivity) : 'Never'}
+                                Chrome • Last active{" "}
+                                {connection.lastActivity
+                                  ? formatDate(connection.lastActivity)
+                                  : "Never"}
                               </p>
                               <p className="text-xs text-gray-400">
                                 {connection.totalContentSaved || 0} items saved
@@ -389,28 +486,34 @@ export function PrivacyTab() {
                             </div>
                           </div>
                           <div className="flex items-center space-x-3">
-                            <Badge 
+                            <Badge
                               className="bg-purple-600 text-white hover:bg-purple-700"
-                              style={{ backgroundColor: '#7C3AED' }}
+                              style={{ backgroundColor: "#7C3AED" }}
                             >
                               Connected
                             </Badge>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="p-1 hover:bg-purple-100">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="p-1 hover:bg-purple-100"
+                                >
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleViewActivity(connection)}
                                   className="cursor-pointer focus:bg-purple-50 focus:text-purple-600"
                                 >
                                   <Activity className="h-4 w-4 mr-2" />
                                   View Activity
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => handleDisconnect(connection.id)}
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleDisconnect(connection.id)
+                                  }
                                   className="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700"
                                 >
                                   <Unlink2 className="h-4 w-4 mr-2" />
@@ -429,7 +532,9 @@ export function PrivacyTab() {
                 {getInactiveConnections().length > 0 && (
                   <div>
                     <button
-                      onClick={() => setShowPreviousConnections(!showPreviousConnections)}
+                      onClick={() =>
+                        setShowPreviousConnections(!showPreviousConnections)
+                      }
                       className="flex items-center space-x-2 text-sm text-purple-600 hover:text-purple-700 mb-4"
                     >
                       {showPreviousConnections ? (
@@ -437,23 +542,38 @@ export function PrivacyTab() {
                       ) : (
                         <ChevronRight className="h-4 w-4" />
                       )}
-                      <span>View Previous Connections ({getInactiveConnections().length})</span>
+                      <span>
+                        View Previous Connections (
+                        {getInactiveConnections().length})
+                      </span>
                     </button>
-                    
+
                     {showPreviousConnections && (
                       <div className="space-y-3 ml-6">
                         {getInactiveConnections().map((connection) => (
-                          <div key={connection.id} className="flex items-center justify-between p-3 border border-purple-200 rounded-lg bg-purple-25">
+                          <div
+                            key={connection.id}
+                            className="flex items-center justify-between p-3 border border-purple-200 rounded-lg bg-purple-25"
+                          >
                             <div className="flex items-center space-x-3">
                               <Chrome className="h-5 w-5 text-gray-400" />
                               <div>
-                                <h5 className="font-medium text-gray-700">{connection.deviceName}</h5>
+                                <h5 className="font-medium text-gray-700">
+                                  {connection.deviceName}
+                                </h5>
                                 <p className="text-sm text-gray-500">
-                                  Disconnected • {connection.lastActivity ? formatDate(connection.lastActivity) : 'Never'} • Manual disconnect
+                                  Disconnected •{" "}
+                                  {connection.lastActivity
+                                    ? formatDate(connection.lastActivity)
+                                    : "Never"}{" "}
+                                  • Manual disconnect
                                 </p>
                               </div>
                             </div>
-                            <Badge variant="outline" className="text-gray-500 border-purple-300">
+                            <Badge
+                              variant="outline"
+                              className="text-gray-500 border-purple-300"
+                            >
                               Disconnected
                             </Badge>
                           </div>
@@ -464,14 +584,18 @@ export function PrivacyTab() {
                 )}
 
                 {/* No Connections Message */}
-                {getActiveConnections().length === 0 && getInactiveConnections().length === 0 && (
-                  <div className="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
-                    <p className="text-gray-600 mb-2">No extension connections yet</p>
-                    <p className="text-sm text-gray-500">
-                      Install the Tagzs extension and sign in to connect your browser
-                    </p>
-                  </div>
-                )}
+                {getActiveConnections().length === 0 &&
+                  getInactiveConnections().length === 0 && (
+                    <div className="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                      <p className="text-gray-600 mb-2">
+                        No extension connections yet
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Install the Tagzs extension and sign in to connect your
+                        browser
+                      </p>
+                    </div>
+                  )}
               </>
             ) : null}
           </div>
@@ -481,11 +605,13 @@ export function PrivacyTab() {
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="font-semibold text-gray-900 mb-1">Mobile App</h4>
-                <p className="text-sm text-gray-500">Access your knowledge base on mobile</p>
+                <p className="text-sm text-gray-500">
+                  Access your knowledge base on mobile
+                </p>
               </div>
-              <Button 
+              <Button
                 className="bg-purple-600 hover:bg-purple-700 text-white border-0"
-                style={{ backgroundColor: '#7C3AED' }}
+                style={{ backgroundColor: "#7C3AED" }}
               >
                 Connect
               </Button>
@@ -495,7 +621,10 @@ export function PrivacyTab() {
       </div>
 
       {/* Change Password Modal */}
-      <Dialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen}>
+      <Dialog
+        open={isChangePasswordOpen}
+        onOpenChange={setIsChangePasswordOpen}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader className="pb-4 border-b border-purple-100">
             <DialogTitle className="flex items-center space-x-2 text-lg font-semibold">
@@ -506,7 +635,7 @@ export function PrivacyTab() {
               Enter your new password to update your account security
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleChangePassword} className="space-y-4 py-4">
             {/* New Password */}
             <div className="space-y-2">
@@ -518,8 +647,8 @@ export function PrivacyTab() {
                   placeholder="Enter your new password"
                   value={newPassword}
                   onChange={(e) => {
-                    setNewPassword(e.target.value)
-                    setPasswordError('')
+                    setNewPassword(e.target.value);
+                    setPasswordError("");
                   }}
                   disabled={isChangingPassword}
                   className={passwordError ? "border-destructive" : ""}
@@ -548,8 +677,8 @@ export function PrivacyTab() {
                   placeholder="Confirm your new password"
                   value={confirmPassword}
                   onChange={(e) => {
-                    setConfirmPassword(e.target.value)
-                    setPasswordError('')
+                    setConfirmPassword(e.target.value);
+                    setPasswordError("");
                   }}
                   disabled={isChangingPassword}
                   className={passwordError ? "border-destructive" : ""}
@@ -570,22 +699,35 @@ export function PrivacyTab() {
 
             {/* Password Requirements */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-xs font-medium text-blue-900 mb-2">Password Requirements:</p>
+              <p className="text-xs font-medium text-blue-900 mb-2">
+                Password Requirements:
+              </p>
               <ul className="text-xs text-blue-800 space-y-1">
                 <li className={newPassword.length >= 8 ? "text-green-600" : ""}>
                   • At least 8 characters {newPassword.length >= 8 && "✓"}
                 </li>
-                <li className={/[A-Z]/.test(newPassword) ? "text-green-600" : ""}>
+                <li
+                  className={/[A-Z]/.test(newPassword) ? "text-green-600" : ""}
+                >
                   • One uppercase letter {/[A-Z]/.test(newPassword) && "✓"}
                 </li>
-                <li className={/[a-z]/.test(newPassword) ? "text-green-600" : ""}>
+                <li
+                  className={/[a-z]/.test(newPassword) ? "text-green-600" : ""}
+                >
                   • One lowercase letter {/[a-z]/.test(newPassword) && "✓"}
                 </li>
-                <li className={/[0-9]/.test(newPassword) ? "text-green-600" : ""}>
+                <li
+                  className={/[0-9]/.test(newPassword) ? "text-green-600" : ""}
+                >
                   • One number {/[0-9]/.test(newPassword) && "✓"}
                 </li>
-                <li className={/[^A-Za-z0-9]/.test(newPassword) ? "text-green-600" : ""}>
-                  • One special character {/[^A-Za-z0-9]/.test(newPassword) && "✓"}
+                <li
+                  className={
+                    /[^A-Za-z0-9]/.test(newPassword) ? "text-green-600" : ""
+                  }
+                >
+                  • One special character{" "}
+                  {/[^A-Za-z0-9]/.test(newPassword) && "✓"}
                 </li>
               </ul>
             </div>
@@ -629,7 +771,9 @@ export function PrivacyTab() {
               <Button
                 type="submit"
                 className="bg-purple-600 hover:bg-purple-700"
-                disabled={isChangingPassword || !newPassword || !confirmPassword}
+                disabled={
+                  isChangingPassword || !newPassword || !confirmPassword
+                }
               >
                 {isChangingPassword ? (
                   <>
@@ -649,7 +793,10 @@ export function PrivacyTab() {
       </Dialog>
 
       {/* Connection Details Modal */}
-      <Dialog open={isConnectionDetailsOpen} onOpenChange={setIsConnectionDetailsOpen}>
+      <Dialog
+        open={isConnectionDetailsOpen}
+        onOpenChange={setIsConnectionDetailsOpen}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader className="pb-4 border-b border-purple-100">
             <DialogTitle className="flex items-center space-x-2 text-lg font-semibold">
@@ -660,32 +807,50 @@ export function PrivacyTab() {
               Information about this browser extension connection
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedConnection && (
             <div className="space-y-6 py-4">
               {/* Device Info */}
               <div className="flex items-center space-x-3">
                 <Chrome className="h-8 w-8 text-blue-500" />
                 <div>
-                  <h4 className="font-medium text-gray-900">{selectedConnection.deviceName}</h4>
-                  <p className="text-sm text-gray-500">{selectedConnection.userAgent || 'Chrome Browser'}</p>
+                  <h4 className="font-medium text-gray-900">
+                    {selectedConnection.deviceName}
+                  </h4>
+                  <p className="text-sm text-gray-500">
+                    {selectedConnection.userAgent || "Chrome Browser"}
+                  </p>
                 </div>
-                <Badge 
-                  className={`ml-auto ${selectedConnection.status === 'active' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-600'}`}
-                  style={selectedConnection.status === 'active' ? { backgroundColor: '#7C3AED' } : {}}
+                <Badge
+                  className={`ml-auto ${
+                    selectedConnection.status === "active"
+                      ? "bg-purple-600 text-white"
+                      : "bg-gray-200 text-gray-600"
+                  }`}
+                  style={
+                    selectedConnection.status === "active"
+                      ? { backgroundColor: "#7C3AED" }
+                      : {}
+                  }
                 >
-                  {selectedConnection.status === 'active' ? 'Connected' : 'Disconnected'}
+                  {selectedConnection.status === "active"
+                    ? "Connected"
+                    : "Disconnected"}
                 </Badge>
               </div>
 
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-100">
-                  <div className="text-2xl font-semibold text-gray-900">{selectedConnection.totalContentSaved || 0}</div>
+                  <div className="text-2xl font-semibold text-gray-900">
+                    {selectedConnection.totalContentSaved || 0}
+                  </div>
                   <div className="text-sm text-gray-600">Items Saved</div>
                 </div>
                 <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-100">
-                  <div className="text-2xl font-semibold text-gray-900">{selectedConnection.totalAPICallsMade || 0}</div>
+                  <div className="text-2xl font-semibold text-gray-900">
+                    {selectedConnection.totalAPICallsMade || 0}
+                  </div>
                   <div className="text-sm text-gray-600">API Requests</div>
                 </div>
               </div>
@@ -700,55 +865,71 @@ export function PrivacyTab() {
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Status</span>
                     <span className="text-sm font-medium text-gray-900">
-                      {selectedConnection.status === 'active' ? 'Active' : 'Disconnected'}
+                      {selectedConnection.status === "active"
+                        ? "Active"
+                        : "Disconnected"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Last Used</span>
                     <span className="text-sm text-gray-500">
-                      {selectedConnection.lastActivity ? formatDate(selectedConnection.lastActivity) : 'Never'}
+                      {selectedConnection.lastActivity
+                        ? formatDate(selectedConnection.lastActivity)
+                        : "Never"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Last Heartbeat</span>
+                    <span className="text-sm text-gray-600">
+                      Last Heartbeat
+                    </span>
                     <span className="text-sm text-gray-500">
-                      {selectedConnection.lastHeartbeat ? formatDate(selectedConnection.lastHeartbeat) : 'Never'}
+                      {selectedConnection.lastHeartbeat
+                        ? formatDate(selectedConnection.lastHeartbeat)
+                        : "Never"}
                     </span>
                   </div>
                   {selectedConnection.ipAddress && (
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">IP Address</span>
-                      <span className="text-sm text-gray-500">{selectedConnection.ipAddress}</span>
+                      <span className="text-sm text-gray-500">
+                        {selectedConnection.ipAddress}
+                      </span>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Security Status */}
-              {selectedConnection.status === 'active' ? (
+              {selectedConnection.status === "active" ? (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-center space-x-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="text-sm font-medium text-green-800">Security Status</span>
+                    <span className="text-sm font-medium text-green-800">
+                      Security Status
+                    </span>
                     <Badge className="bg-green-100 text-green-800 text-xs">
                       Active & Secure
                     </Badge>
                   </div>
                   <p className="text-sm text-green-700 mt-2">
-                    This connection is active and can save content to your TagZ account.
+                    This connection is active and can save content to your TagZ
+                    account.
                   </p>
                 </div>
               ) : (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center space-x-2">
                     <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                    <span className="text-sm font-medium text-gray-800">Status</span>
+                    <span className="text-sm font-medium text-gray-800">
+                      Status
+                    </span>
                     <Badge className="bg-gray-100 text-gray-800 text-xs">
                       Disconnected
                     </Badge>
                   </div>
                   <p className="text-sm text-gray-700 mt-2">
-                    This connection has been disconnected and can no longer save content.
+                    This connection has been disconnected and can no longer save
+                    content.
                   </p>
                 </div>
               )}
@@ -757,5 +938,5 @@ export function PrivacyTab() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

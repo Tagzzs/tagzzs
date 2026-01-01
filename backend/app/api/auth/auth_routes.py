@@ -1,14 +1,17 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, status
+from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, status, Response, Request, Depends
 from app.api.auth.schemas import SignUpRequest, SignInRequest
 from app.api.auth.supabase_client import get_supabase
 from app.services.firebase.firebase_user_service import FirebaseUserService
+from app.api.dependencies import get_current_user
+
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/sign-up", status_code=status.HTTP_201_CREATED)
-async def sign_up(body: SignUpRequest):
+async def sign_up(body: SignUpRequest, response: Response):
     supabase = get_supabase()
 
     # Attempt user creation with Supabase Auth
@@ -89,25 +92,37 @@ async def sign_up(body: SignUpRequest):
         # Log warning but continue
         print(f"Firebase Sync Warning: Failed to create document for {user_id}")
 
-    # Return success response
+    # Set cookies if session is present
+    if res.session:
+        response.set_cookie(
+            key="access_token",
+            value=res.session.access_token,
+            httponly=True,
+            secure=False,  # Set to False for localhost development
+            samesite="lax",
+            max_age=res.session.expires_in,
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=res.session.refresh_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=30 * 24 * 60 * 60,  # 30 days roughly
+        )
+
+    # Return success response (Sensitized)
     return {
         "success": True,
         "data": {
             "user": {"id": res.user.id, "email": res.user.email, "name": body.name},
-            "session": {
-                "accessToken": res.session.access_token,
-                "refreshToken": res.session.refresh_token,
-                "expiresAt": res.session.expires_at,
-            }
-            if res.session
-            else None,  # TODO: Will be used for email confirmation later.
             "message": "Account created! Check your email if verification is required.",
         },
     }
 
 
 @router.post("/sign-in")
-async def sign_in(body: SignInRequest):
+async def sign_in(body: SignInRequest, response: Response):
     supabase = get_supabase()
 
     # Check if user exists
@@ -156,7 +171,25 @@ async def sign_in(body: SignInRequest):
     if not auth_res.user or not auth_res.session:
         raise HTTPException(status_code=500, detail="Sign-in was unsuccessful")
 
-    # Return success response
+    # Set Cookies
+    response.set_cookie(
+        key="access_token",
+        value=auth_res.session.access_token,
+        httponly=True,
+        secure=False,  # False for localhost
+        samesite="lax",
+        max_age=auth_res.session.expires_in,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=auth_res.session.refresh_token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=30 * 24 * 60 * 60,  # 30 days
+    )
+
+    # Return success response (Sensitized - no tokens in body)
     return {
         "success": True,
         "data": {
@@ -167,75 +200,30 @@ async def sign_in(body: SignInRequest):
                 "emailConfirmed": bool(auth_res.user.email_confirmed_at),
                 "lastSignIn": auth_res.user.last_sign_in_at,
             },
-            "session": {
-                "accessToken": auth_res.session.access_token,
-                "refreshToken": auth_res.session.refresh_token,
-                "expiresAt": auth_res.session.expires_at,
-                "expiresIn": auth_res.session.expires_in,
-            },
             "message": "Sign-in successful",
         },
     }
 
 
-from fastapi import APIRouter, HTTPException, Request, status
-from .supabase_client import get_supabase
-from datetime import datetime
-
-
 @router.post("/sign-out")
-async def sign_out(request: Request):
+async def sign_out(request: Request, response: Response):
     """
     Signs out the current user session.
-    Equivalent to sign_out_route.ts.
+    Clears cookies and calls Supabase signout.
     """
     try:
         supabase = get_supabase()
 
-        # Extract token from Authorization header
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            # If no header, user is effectively signed out
-            return {
-                "success": True,
-                "data": {
-                    "message": "Already signed out or no session found",
-                    "loggedOut": True,
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
-            }
-
         # Attempt to sign out using Supabase Auth
         try:
             supabase.auth.sign_out()
-        except Exception as signout_error:
-            error_msg = str(signout_error)
-            if "Invalid session" in error_msg or "No session found" in error_msg:
-                pass  # Already logged out, treat as success
-            elif "Network error" in error_msg:
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "success": False,
-                        "error": {
-                            "code": "NETWORK_ERROR",
-                            "message": "Network error during signout",
-                            "details": error_msg,
-                        },
-                    },
-                )
-            else:
-                raise HTTPException(
-                    status_code=500,
-                    detail={
-                        "success": False,
-                        "error": {
-                            "code": "SIGNOUT_FAILED",
-                            "message": "Failed to sign out",
-                            "details": error_msg,
-                        },
-                    },
-                )
+        except Exception:
+            # We ignore errors here because we are clearing cookies anyway
+            pass
+
+        # Clear Cookies
+        response.delete_cookie(key="access_token", httponly=True, samesite="lax")
+        response.delete_cookie(key="refresh_token", httponly=True, samesite="lax")
 
         # Return success response
         return {
@@ -247,8 +235,6 @@ async def sign_out(request: Request):
             },
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -261,3 +247,52 @@ async def sign_out(request: Request):
                 },
             },
         )
+
+
+@router.get("/me")
+async def get_me(user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    Returns the current user based on HttpOnly cookie.
+    Used for client-side auth state initialization.
+    """
+    return {"success": True, "user": user}
+
+
+@router.post("/refresh")
+async def refresh_session(request: Request, response: Response):
+    """
+    Refreshes the session using the refresh token cookie.
+    """
+    refresh_token = request.cookies.get("refresh_token")
+
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="No refresh token found")
+
+    supabase = get_supabase()
+
+    try:
+        res = supabase.auth.refresh_session(refresh_token)
+        if not res.session:
+            raise HTTPException(status_code=401, detail="Session refresh failed")
+
+        # Set new cookies
+        response.set_cookie(
+            key="access_token",
+            value=res.session.access_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=res.session.expires_in,
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=res.session.refresh_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=30 * 24 * 60 * 60,
+        )
+
+        return {"success": True, "user": {"id": res.user.id, "email": res.user.email}}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Refresh failed: {str(e)}")

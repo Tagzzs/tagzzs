@@ -179,6 +179,7 @@ export default function KaiAIChat() {
           "Content-Type": "application/json",
           "X-User-ID": userId,
         },
+        credentials: "include", // Important for HttpOnly cookies
         body: JSON.stringify(requestBody),
       });
 
@@ -258,20 +259,14 @@ export default function KaiAIChat() {
         history.find((h) => h.role === "user")?.content.substring(0, 50) ||
         "Untitled Chat";
 
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/ai-chats/save`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
+          credentials: "include",
           body: JSON.stringify({
             chatId,
             title: finalTitle,
@@ -297,23 +292,11 @@ export default function KaiAIChat() {
   const loadChatHistory = async () => {
     try {
       setIsLoadingHistory(true);
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      if (!token) {
-        console.error("[KAI_AI] No auth token found");
-        return;
-      }
-
       const res = await fetch(
         `${API_BASE_URL}/api/user-database/ai-chats/list`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: {},
+          credentials: "include",
         }
       );
       const data = await res.json();
@@ -331,20 +314,11 @@ export default function KaiAIChat() {
 
   const loadPastChat = async (chatId: string) => {
     try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      if (!token) return;
-
       const res = await fetch(
         `${API_BASE_URL}/api/user-database/ai-chats/get?chatId=${chatId}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: {},
+          credentials: "include",
         }
       );
       const data = await res.json();
@@ -387,20 +361,14 @@ export default function KaiAIChat() {
   const deletePastChat = async (chatId: string) => {
     if (!confirm("Delete this chat?")) return;
     try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const res = await fetch(
         `${API_BASE_URL}/api/user-database/ai-chats/delete?chatId=${chatId}`,
         {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
+          credentials: "include",
         }
       );
       if (res.ok) {

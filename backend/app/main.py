@@ -24,6 +24,7 @@ from app.api import (
     profile_router,
     upload_router,
     ai_chats_router,
+    extension_router,
 )
 
 load_environment()
@@ -34,6 +35,8 @@ app = FastAPI(title="Tagzzs Backend", version="1.0.0")
 allowed_origins = [
     "http://localhost:3000",
     "https://app.tagzzs.com",
+    "https://tagzzs.com",
+    "https://www.tagzzs.com",
 ]
 
 app.add_middleware(
@@ -59,6 +62,7 @@ app.include_router(tags_router)
 app.include_router(profile_router)
 app.include_router(upload_router)
 app.include_router(ai_chats_router)
+app.include_router(extension_router)
 
 
 @app.get("/")

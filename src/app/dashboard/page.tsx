@@ -53,22 +53,26 @@ export default function DashboardPage() {
       setIsLoading(true);
       setError(null);
 
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
       const [contentResponse, tagsResponse] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ sortBy: "newest", limit: 4 }),
-        }),               
-        
-        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`, {
-          method: "POST",
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({}),
-        }),
+        fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include", // Important for HttpOnly cookies
+            body: JSON.stringify({ sortBy: "newest", limit: 4 }),
+          }
+        ),
+
+        fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({}),
+          }
+        ),
       ]);
       if (!contentResponse.ok || !tagsResponse.ok) {
         throw new Error("Failed to fetch dashboard data");
@@ -81,11 +85,15 @@ export default function DashboardPage() {
         throw new Error("API returned error response");
       }
 
-      const allContentResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ sortBy: "newest" }),
-      });
+      const allContentResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ sortBy: "newest" }),
+        }
+      );
       let allContentData = { data: [] };
       if (allContentResponse.ok) {
         allContentData = await allContentResponse.json();
@@ -99,10 +107,13 @@ export default function DashboardPage() {
         const createdDate = new Date(item.createdAt);
         return createdDate >= oneWeekAgo;
       }).length;
-      const topTag = allTags.reduce((prev: TagItem | null, current: TagItem) => {
-        if (!prev || current.contentCount > prev.contentCount) return current;
-        return prev;
-      }, null);
+      const topTag = allTags.reduce(
+        (prev: TagItem | null, current: TagItem) => {
+          if (!prev || current.contentCount > prev.contentCount) return current;
+          return prev;
+        },
+        null
+      );
 
       setContent(contentData.data || []);
       setTags(allTags);
@@ -113,9 +124,10 @@ export default function DashboardPage() {
         topTagName: topTag?.tagName || "",
         topTagCount: topTag?.contentCount || 0,
       });
-
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to load dashboard data");
+      setError(
+        error instanceof Error ? error.message : "Failed to load dashboard data"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -127,11 +139,11 @@ export default function DashboardPage() {
 
   return (
     <>
-    <DashboardLayout>
-      <div className="flex flex-col gap-8">
-        <ClientMeta page="dashboard" personalized={true} />
-      </div>
-    </DashboardLayout>
+      <DashboardLayout>
+        <div className="flex flex-col gap-8">
+          <ClientMeta page="dashboard" personalized={true} />
+        </div>
+      </DashboardLayout>
     </>
   );
 }
