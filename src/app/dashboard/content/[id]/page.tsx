@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { createClient } from "@/utils/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -76,11 +77,23 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       setIsLoading(true)
       setError(null)
 
+      // Get auth token
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.')
+      }
+
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+
       // Fetch content data
-      const contentResponse = await fetch('/api/user-database/content/get', {
+      const contentResponse = await fetch(`${backendUrl}/api/user-database/content/get`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({})
       })
@@ -108,10 +121,11 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
       // Fetch tag data if content has tags
       if (item.tagsId && item.tagsId.length > 0) {
-        const tagsResponse = await fetch('/api/user-database/tags/get', {
+        const tagsResponse = await fetch(`${backendUrl}/api/user-database/tags/get`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({})
         })

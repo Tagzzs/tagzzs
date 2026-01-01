@@ -5,6 +5,7 @@ import {
   Library,
   Plus,
   Tag,
+  Files,
   TrendingUp,
   Clock,
   Sparkles,
@@ -62,6 +63,11 @@ const menuItems: MenuItem[] = [
     url: "/dashboard/kai-ai",
     icon: Sparkles,
   },
+  {
+    title: "Drafts",
+    url: "/dashboard/youtube-drafts",
+    icon: Files,
+  }
 ];
 
 const quickActions = [

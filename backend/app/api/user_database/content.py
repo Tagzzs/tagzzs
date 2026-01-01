@@ -170,10 +170,19 @@ async def add_content(req: Request):
                 },
             )
 
-        # User Verification
+        # User Verification - Create if doesn't exist
         user_ref = admin_db.collection("users").document(user_id)
         try:
             user_doc = user_ref.get()
+            
+            # Auto-create user document if it doesn't exist
+            if not user_doc.exists:
+                user_ref.set({
+                    "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "email": user.get("email", ""),
+                    "totalContent": 0,
+                    "totalTags": 0,
+                })
         except Exception:
             return JSONResponse(
                 status_code=503,
@@ -183,19 +192,6 @@ async def add_content(req: Request):
                         "code": "DATABASE_ERROR",
                         "message": "Unable to verify user account",
                         "details": "Database connection issue, please try again",
-                    },
-                },
-            )
-
-        if not user_doc.exists:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "USER_NOT_FOUND",
-                        "message": "User account not found in database",
-                        "details": "Please ensure your account is properly set up",
                     },
                 },
             )

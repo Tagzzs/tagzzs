@@ -17,6 +17,7 @@ from .user_database.tags import router as tags_router
 from .user_database.profile import router as profile_router
 from .user_database.ai_chats import router as ai_chats_router
 from .upload import router as upload_router
+from .youtube import router as youtube_router
 
 __all__ = [
     "extract_router",
@@ -32,4 +33,5 @@ __all__ = [
     "profile_router",
     "upload_router",
     "ai_chats_router",
+    "youtube_router",
 ]

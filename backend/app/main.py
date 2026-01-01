@@ -24,6 +24,7 @@ from app.api import (
     profile_router,
     upload_router,
     ai_chats_router,
+    youtube_router,
 )
 
 load_environment()
@@ -59,6 +60,7 @@ app.include_router(tags_router)
 app.include_router(profile_router)
 app.include_router(upload_router)
 app.include_router(ai_chats_router)
+app.include_router(youtube_router)
 
 
 @app.get("/")
