@@ -62,6 +62,12 @@ export default function SignInPage() {
     }
   }, [message, error, toast]);
 
+  const handleGoogleSignIn = () => {
+    setIsLoading(true);
+    // Redirect to backend endpoint which handles the OAuth flow
+    window.location.href = `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/login/google`;
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -378,8 +384,9 @@ export default function SignInPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="opacity-50 cursor-not-allowed border-gray-200"
-                    disabled={true}
+                    className="border-gray-200"
+                    disabled={isLoading}
+                    onClick={handleGoogleSignIn}
                   >
                     <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                       <path
