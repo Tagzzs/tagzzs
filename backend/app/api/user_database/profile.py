@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, HttpUrl, model_validator, ValidationError
 from supabase import create_client, Client
 
 # Internal imports
-from app.services.token_verifier import get_current_user
+from app.api.dependencies import get_current_user
 from app.utils.supabase.auth import create_auth_error
 
 
@@ -125,6 +125,107 @@ async def update_profile(
                 "fieldsUpdated": list(fields_to_update.keys()),
                 "cacheInvalidated": True,
                 "timestamp": current_time,
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Internal server error",
+                "code": "INTERNAL_ERROR",
+                "details": str(e),
+            },
+        )
+
+
+@router.get("/profile")
+async def get_user_profile(
+    request: Request, user: Dict[str, Any] = Depends(get_current_user)
+):
+    try:
+        if not user:
+            return create_auth_error("Authentication required to view profile")
+
+        if not supabase:
+            return JSONResponse(
+                status_code=500, content={"error": "Supabase configuration missing"}
+            )
+
+        user_id = user.get("id")
+
+        # Fetch user profile from Supabase
+        user_res = (
+            supabase.table("users").select("*").eq("userid", user_id).single().execute()
+        )
+
+        if not user_res.data:
+            # If no profile in 'users' table, return basic info from auth
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "profile": {
+                        "name": user.get("user_metadata", {}).get("name", "User"),
+                        "email": user.get("email", ""),
+                        "avatar_url": user.get("user_metadata", {}).get("avatar", None),
+                    },
+                },
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "profile": user_res.data,
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Internal server error",
+                "code": "INTERNAL_ERROR",
+                "details": str(e),
+            },
+        )
+
+
+@router.get("/stats")
+async def get_user_stats(
+    request: Request, user: Dict[str, Any] = Depends(get_current_user)
+):
+    try:
+        if not user:
+            return create_auth_error("Authentication required to view stats")
+
+        user_id = user.get("id")
+
+        # Internal import to avoid circular dependency if placed at top
+        from app.services.firebase.firebase_user_service import FirebaseUserService
+
+        user_data = FirebaseUserService.get_user_document(user_id)
+
+        if not user_data:
+            # Just return zeros if no user doc (might be new user)
+            return JSONResponse(
+                status_code=200,
+                content={"success": True, "stats": {"totalContent": 0, "totalTags": 0}},
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "stats": {
+                    "totalContent": user_data.get("totalContent", 0),
+                    "totalTags": user_data.get("totalTags", 0),
+                    "createdAt": user_data.get("createdAt"),
+                    "updatedAt": user_data.get("updatedAt"),
+                },
             },
         )
 

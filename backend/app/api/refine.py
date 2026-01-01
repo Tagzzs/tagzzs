@@ -5,20 +5,15 @@ API endpoints for content refinement pipelines (extract-refine combos)
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, HttpUrl
-import asyncio
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Request, Depends
-from pydantic import BaseModel, HttpUrl
+from fastapi import Request, Depends
 import time
 import uuid
 import os
-import httpx
-import jwt
-from datetime import datetime
 from typing import Dict, Any
 from urllib.parse import urlparse
 from fastapi.responses import JSONResponse
-from app.services.token_verifier import get_current_user
+from app.api.dependencies import get_current_user
 from app.utils.supabase.auth import create_auth_error
 
 router = APIRouter(tags=["refinement"])
@@ -164,7 +159,7 @@ def validate_url_security(url: str):
                 "reason": "Access to administrative or internal resources is not allowed",
             }
         return {"safe": True}
-    except:
+    except Exception:
         return {"safe": False, "reason": "Invalid URL format"}
 
 
@@ -235,7 +230,7 @@ async def post_extract(req: Request):
         # Parse request body
         try:
             body = await req.json()
-        except:
+        except Exception:
             log_request(
                 request_id,
                 user_id,
@@ -267,9 +262,6 @@ async def post_extract(req: Request):
                 status_code=400,
             )
 
-        options = body.get("options", {})
-        timeout_ms = options.get("timeout", 30000)
-
         # Security validation
         security_check = validate_url_security(url)
         if not security_check["safe"]:
@@ -290,17 +282,13 @@ async def post_extract(req: Request):
             )
 
         # Extraction Pipeline logic
-        extraction_timeout = (timeout_ms + 60000) / 1000.0
         try:
-            async with httpx.AsyncClient() as client:
-                pipeline_result = await extract_and_refine_auto({"url": url})
+            pipeline_result = await extract_and_refine_auto({"url": url})
 
-                processing_time = int(time.time() * 1000) - start_time
+            processing_time = int(time.time() * 1000) - start_time
 
-                if not pipeline_result or "content" not in pipeline_result:
-                    raise Exception(
-                        "External service returned invalid response structure"
-                    )
+            if not pipeline_result or "content" not in pipeline_result:
+                raise Exception("External service returned invalid response structure")
         except Exception as extract_error:
             processing_time = int(time.time() * 1000) - start_time
             log_request(
@@ -348,7 +336,6 @@ async def post_extract(req: Request):
         error_message = str(api_error)
         status_code = 500
         error_label = "Internal server error"
-        details = None
 
         if "rate limit" in error_message.lower() or "429" in error_message:
             status_code = 503
@@ -370,10 +357,9 @@ async def post_extract(req: Request):
         )
 
 
-@router.post("/extract-refine")  
+@router.post("/extract-refine")
 async def extract_and_refine_auto(
-    request: dict, 
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    request: dict, current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Universal Extract & Refine Pipeline: Auto-detect content type → Extract → Summarize → Tag
@@ -383,7 +369,7 @@ async def extract_and_refine_auto(
     try:
         if not current_user:
             return create_auth_error("Authentication required to update profile")
-        
+
         if "url" not in request or not request["url"]:
             raise ValueError("Missing required field: url")
 
@@ -413,12 +399,21 @@ async def extract_and_refine_auto(
 
         # Route to appropriate extractor
         if content_type == "youtube":
-            from app.utils.supabase.supabase_client import supabase # globally initialized supabase client
-            response = supabase.table("extraction_queue").insert({
-                "video_url": url,
-                "user_id": current_user['id'], 
-                "status": "pending"
-            }).execute()
+            from app.utils.supabase.supabase_client import (
+                supabase,
+            )  # globally initialized supabase client
+
+            response = (
+                supabase.table("extraction_queue")
+                .insert(
+                    {
+                        "video_url": url,
+                        "user_id": current_user["id"],
+                        "status": "pending",
+                    }
+                )
+                .execute()
+            )
 
             if not response.data:
                 raise ValueError("Failed to add YouTube request to queue")
@@ -426,9 +421,9 @@ async def extract_and_refine_auto(
             return {
                 "status": "queued",
                 "message": "YouTube processing started in background",
-                "queue_id": response.data[0]["id"]
+                "queue_id": response.data[0]["id"],
             }
-        
+
         elif content_type == "pdf":
             from app.services.extractors.pdf.orchestrator import (
                 extract_pdf_content_orchestrated,

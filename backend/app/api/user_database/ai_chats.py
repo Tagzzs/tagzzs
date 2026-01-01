@@ -8,7 +8,7 @@ from google.cloud import firestore
 
 # Internal imports
 from app.services.firebase.firebase_admin_setup import admin_db
-from app.services.token_verifier import get_current_user
+from app.api.dependencies import get_current_user
 from app.utils.supabase.auth import create_auth_error
 
 

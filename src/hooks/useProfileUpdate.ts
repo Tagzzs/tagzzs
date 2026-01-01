@@ -32,13 +32,10 @@ export function useProfileUpdate() {
 
       try {
         
-        const supabase = createClient()
-        const { data: { session } } = await supabase.auth.getSession()
-        const token = session?.access_token
-        
         const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/profile`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" , 'Authorization': `Bearer ${token}` },
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify(data),
         });
 

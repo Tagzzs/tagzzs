@@ -313,7 +313,7 @@ async def chat_with_agent(
                 error=response.response_text,
             )
 
-        logger.info(f"✅ [CHAT_AGENT] Chat processed successfully")
+        logger.info("✅ [CHAT_AGENT] Chat processed successfully")
 
         return AgentChatResponse(
             success=True,
@@ -379,7 +379,6 @@ async def health_check() -> HealthResponse:
 async def list_tasks() -> TaskListResponse:
     """List all available tools that the ReAct agent can use."""
     try:
-        from app.services.ai.tools import Tools
 
         tools = [
             TaskInfo(

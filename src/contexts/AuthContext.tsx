@@ -1,130 +1,152 @@
-'use client'
+"use client";
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { createClient } from '../utils/supabase/client'
-import type { User, Session } from '@supabase/supabase-js'
-import { useRouter } from 'next/navigation'
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-interface AuthContextType {
-  user: User | null
-  session: Session | null
-  loading: boolean
-  signOut: () => Promise<void>
-  refreshSession: () => Promise<void>
+interface User {
+  id: string;
+  email?: string;
+  role?: string;
+  user_metadata?: {
+    name?: string;
+    full_name?: string;
+    avatar?: string;
+    avatar_url?: string;
+    [key: string]: any;
+  };
+  created_at?: string;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  signOut: () => Promise<void>;
+  refreshSession: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [hasInitialized, setHasInitialized] = useState(false)
-  const router = useRouter()
-  const supabase = createClient()
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [hasInitialized, setHasInitialized] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    // Get initial session
-    const getSession = async () => {
+    // Check current session from backend (cookies)
+    const checkSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
-        if (error) {
-          console.error('Error getting session:', error)
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/me`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include", // Send cookies
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.user) {
+            setUser(data.user);
+          } else {
+            setUser(null);
+          }
         } else {
-          setSession(session)
-          setUser(session?.user ?? null)
+          // If 401, potentially try refresh or just set null
+          setUser(null);
         }
       } catch (error) {
-        console.error('Session fetch error:', error)
+        console.error("Session check error:", error);
+        setUser(null);
       } finally {
-        setLoading(false)
-        setHasInitialized(true)
+        setLoading(false);
+        setHasInitialized(true);
+      }
+    };
+
+    checkSession();
+  }, []);
+
+  // Handle redirects after initialization
+  useEffect(() => {
+    if (!loading && hasInitialized) {
+      const currentPath = window.location.pathname;
+      if (user) {
+        // If user is logged in and on auth pages, redirect to dashboard
+        const params = new URLSearchParams(window.location.search);
+        const redirectTo = params.get("redirect") || "/dashboard";
+        if (currentPath.startsWith("/auth/") || currentPath === "/") {
+          router.push(redirectTo);
+        }
+      } else {
+        // If user is NOT logged in and on protected pages (dashboard), redirect to sign-in
+        // Note: Middleware usually handles this, but client-side check doesn't hurt
+        // We'll leave it to middleware mostly to avoid flicker
       }
     }
-
-    getSession()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
-        setLoading(false)
-
-        // Handle sign-in and sign-up events
-        if (event === 'SIGNED_IN') {
-          if (hasInitialized && !user && session?.user) {
-            const params = new URLSearchParams(window.location.search)
-            const redirectTo = params.get('redirect') || '/dashboard'
-            
-            // Additional check: only redirect if we're on auth pages
-            const currentPath = window.location.pathname
-            if (currentPath.startsWith('/auth/') || currentPath === '/') {
-              router.push(redirectTo)
-            }
-          }
-        }
-
-        // Handle sign-out event
-        if (event === 'SIGNED_OUT') {
-          // Clear any cached data and redirect to sign-in
-          router.push('/auth/sign-in')
-        }
-      }
-    )
-
-    return () => subscription.unsubscribe()
-  }, [supabase.auth, router, hasInitialized, user])
+  }, [loading, hasInitialized, user, router]);
 
   const signOut = async () => {
     try {
-      setLoading(true)
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        console.error('Error signing out:', error)
-      }
+      setLoading(true);
+      await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      setUser(null);
+      router.push("/auth/sign-in");
     } catch (error) {
-      console.error('Sign out error:', error)
+      console.error("Sign out error:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const refreshSession = async () => {
     try {
-      const { data: { session }, error } = await supabase.auth.refreshSession()
-      if (error) {
-        console.error('Error refreshing session:', error)
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/refresh`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.user) {
+          setUser(data.user);
+        }
       } else {
-        setSession(session)
-        setUser(session?.user ?? null)
+        // Refresh failed, maybe sign out?
+        console.warn("Session refresh failed");
       }
     } catch (error) {
-      console.error('Refresh session error:', error)
+      console.error("Refresh session error:", error);
     }
-  }
+  };
 
   const value = {
     user,
-    session,
     loading,
     signOut,
     refreshSession,
-  }
+  };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error("useAuth must be used within an AuthProvider");
   }
-  return context
+  return context;
 }
 
-export default AuthProvider
+export default AuthProvider;

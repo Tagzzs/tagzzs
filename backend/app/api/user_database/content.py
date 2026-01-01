@@ -16,7 +16,7 @@ from google.cloud.firestore import Query as FirestoreQuery, FieldFilter
 # Internal imports
 from app.services.firebase.firebase_admin_setup import admin_db
 from app.services.firebase.firebase_user_service import FirebaseUserService
-from app.services.token_verifier import get_current_user
+from app.api.dependencies import get_current_user
 from app.services.tag_count_service import (
     update_multiple_tag_counts,
     update_tag_counts_on_array_change,
@@ -102,7 +102,7 @@ async def add_content(req: Request):
     try:
         try:
             user = await get_current_user(req)
-        except Exception as e:
+        except Exception:
             return create_auth_error(
                 message="Authentication required to add content"
             )  # Status code parameter was redundant
@@ -475,7 +475,7 @@ async def delete_content(
                 status_code=200,
             )
 
-    except Exception as e:
+    except Exception:
         import traceback
 
         traceback.print_exc()
@@ -559,7 +559,7 @@ async def update_content(
                 result = urlparse(filtered_update_fields["link"])
                 if not all([result.scheme, result.netloc]):
                     raise ValueError
-            except:
+            except Exception:
                 validation_errors.append("Invalid URL format for link")
 
         if (
@@ -611,7 +611,7 @@ async def update_content(
                 update_payload["contentSource"] = urlparse(
                     filtered_update_fields["link"]
                 ).hostname
-            except:
+            except Exception:
                 pass
 
         # Update the document
@@ -671,7 +671,7 @@ async def get_content(
 
         return {"success": True, "data": content_data}
 
-    except Exception as e:
+    except Exception:
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 

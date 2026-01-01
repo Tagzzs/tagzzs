@@ -3,7 +3,7 @@ Script to verify the JWT token locally when sent from the frontend
 """
 
 import jwt
-from fastapi import Request, HTTPException, Depends
+from fastapi import Request
 from typing import Dict, Any
 import os
 

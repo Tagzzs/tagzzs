@@ -1,6 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { UserProfile } from "@/types/UserProfile";
-import { createClient } from "@/utils/supabase/client";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import type { Database } from "@/types/supabase/types";
 import { generateAvatar } from "@/utils/avatar-generator";
@@ -23,7 +22,9 @@ export function useUserProfile(): UseUserProfileReturn {
   const [error, setError] = useState<string | null>(null);
 
   const fetchUserProfile = useCallback(async () => {
-    if (!user?.id) {
+    // If not user ID, we might still try fetching /profile if cookie is set,
+    // but useAuth should supply the user.
+    if (!user) {
       setDbUserData(null);
       setLoading(false);
       return;
@@ -33,23 +34,29 @@ export function useUserProfile(): UseUserProfileReturn {
       setLoading(true);
       setError(null);
 
-      const supabase = createClient();
-
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("userid", user.id)
-        .single();
-
-      if (error) {
-        if (error.code === "PGRST116") {
-          console.log("No custom profile found, using auth data");
-          setDbUserData(null);
-        } else {
-          throw new Error(error.message);
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/profile`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
         }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch profile");
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.profile) {
+        setDbUserData(result.profile);
       } else {
-        setDbUserData(data);
+        // Fallback or error
+        console.log("No profile returned from backend");
+        setDbUserData(null);
       }
     } catch (err) {
       console.error("Profile fetch error:", err);
@@ -58,7 +65,7 @@ export function useUserProfile(): UseUserProfileReturn {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user]);
   useEffect(() => {
     setError(null);
 
@@ -76,26 +83,21 @@ export function useUserProfile(): UseUserProfileReturn {
     return {
       userId: user.id,
       name:
-        dbUserData?.name || 
-        user.user_metadata?.name || 
-        user.user_metadata?.full_name || 
-        user.email?.split("@")[0] || 
-        "User", 
+        dbUserData?.name ||
+        user.user_metadata?.name ||
+        user.user_metadata?.full_name ||
+        user.email?.split("@")[0] ||
+        "User",
 
-      email:
-        dbUserData?.email ||
-        user.email ||
-        "",
+      email: dbUserData?.email || user.email || "",
 
       avatar:
         dbUserData?.avatar_url ||
-        user.user_metadata?.avatar || 
-        generateAvatar(dbUserData?.name || user.email || "User"), 
+        user.user_metadata?.avatar ||
+        generateAvatar(dbUserData?.name || user.email || "User"),
 
       createdAt:
-        dbUserData?.created_at ||
-        user.created_at || 
-        new Date().toISOString(), 
+        dbUserData?.created_at || user.created_at || new Date().toISOString(),
     } satisfies UserProfile;
   }, [dbUserData, user]);
 

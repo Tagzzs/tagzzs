@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, validator, AliasChoices
 # Internal imports
 from app.services.firebase.firebase_admin_setup import admin_db
 from app.services.firebase.firebase_user_service import FirebaseUserService
-from app.services.token_verifier import get_current_user
+from app.api.dependencies import get_current_user
 from app.utils.supabase.auth import create_auth_error
 from app.utils.tag_slugs_generator import generate_tag_slug
 

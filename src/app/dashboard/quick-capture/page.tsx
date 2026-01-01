@@ -1,29 +1,49 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import Image from "next/image"
-import { ClientMeta } from "@/components/client-meta"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, X, LinkIcon, Upload, Sparkles, Check, Loader2, ImageIcon, Youtube, ArrowLeft } from "lucide-react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react";
+import Image from "next/image";
+import { ClientMeta } from "@/components/client-meta";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  X,
+  LinkIcon,
+  Upload,
+  Sparkles,
+  Check,
+  Loader2,
+  ImageIcon, Youtube, ArrowLeft,
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client"
-import { marked } from 'marked'
-// import { useIsMobile } from "@/hooks/use-mobile"
+import { marked } from "marked";
 
 // Configure marked for safe HTML output
 marked.setOptions({
   breaks: true,
   gfm: true,
-})
+});
 
 interface ContentData {
   link: string;
@@ -39,10 +59,10 @@ interface ContentData {
 // Function to convert markdown to HTML safely
 function convertMarkdownToHtml(markdown: string): string {
   try {
-    return marked(markdown) as string
+    return marked(markdown) as string;
   } catch (error) {
-    console.error('Markdown conversion error:', error)
-    return markdown.replace(/\n/g, '<br />')
+    console.error("Markdown conversion error:", error);
+    return markdown.replace(/\n/g, "<br />");
   }
 }
 
@@ -99,7 +119,7 @@ interface YouTubeExtractionResult {
 }
 
 export default function AddContentPage() {
-  const [activeTab, setActiveTab] = useState("url")
+  const [activeTab, setActiveTab] = useState("url");
   const [formData, setFormData] = useState({
     url: "",
     title: "",
@@ -210,11 +230,18 @@ export default function AddContentPage() {
         // Debounce
         const timer = setTimeout(async () => {
           try {
-            const response = await fetch('/api/content/fetch-metadata', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: formData.url })
-            });
+            // Use backend extract endpoint which returns metadata
+            const response = await fetch(
+              `${process.env.NEXT_PUBLIC_BACKEND_URL}/extract/website`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                credentials: "include", // Important for HttpOnly cookies
+                body: JSON.stringify({ url: formData.url }),
+              }
+            );
 
             if (response.ok) {
               const data = await response.json();
@@ -243,10 +270,10 @@ export default function AddContentPage() {
   }, [formData.url]);
 
   const handleAnalyzeUrl = async () => {
-    if (!formData.url) return
+    if (!formData.url) return;
 
-    setIsAnalyzing(true)
-    setExtractionError(null)
+    setIsAnalyzing(true);
+    setExtractionError(null);
 
     try {
       // Check if it's a YouTube URL - handle differently
@@ -290,142 +317,174 @@ export default function AddContentPage() {
       }
 
       // Non-YouTube URLs: use existing synchronous extraction
-      const response = await fetch('/api/content/extract', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: formData.url
-        })
-      })
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/extract-refine/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            url: formData.url,
+          }),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.details || errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(
+          errorData.detail ||
+            errorData.error ||
+            `HTTP ${response.status}: ${response.statusText}`
+        );
       }
 
-      const result = await response.json()
+      // Backend returns the content data directly in structured format
+      const data = await response.json();
 
       // Check if result indicates an error
-      if (result.result === 'error') {
-        throw new Error(result.details || result.error || 'Failed to extract content')
+      if (data.error) {
+        throw new Error(data.error || "Failed to extract content");
       }
 
-      // Check if we have success with content
-      if (result.result === 'success' && result.content) {
+      setFormData((prev) => ({
+        ...prev,
+        title:
+          data.title && data.title !== "Untitled" ? data.title : prev.title,
+        description:
+          data.summary ||
+          (data.content
+            ? data.content.substring(0, 200) + "..."
+            : prev.description),
+        type: data.content_type || "article",
+        tags: data.tags ? data.tags.slice(0, 10) : [],
+        rawContent: data.raw_content || "",
+      }));
 
-        const data = result.content
+      // Handle Thumbnail Upload if present (optional, usually backend handles it or separate flow)
+      // We will skip explicit thumbnail upload here as backend response includes metadata
+      // and useEffect hook handles 'auto-fetch thumbnail' separately for the form state.
+      // But if we want to ensure the thumbnail from refine is used:
+      // data.metadata?.thumbnail_url might be present.
 
-        setFormData((prev) => ({
-          ...prev,
-          title: data.title && data.title !== 'Untitled' ? data.title : prev.title,
-          description: data.summary || (data.content ? data.content.substring(0, 200) + '...' : prev.description),
-          type: data.metadata?.contentType || 'article',
-          tags: data.tags ? data.tags.slice(0, 10) : [],
-          rawContent: data.rawContent || '', // Store full raw content from extraction
-        }))
-
-        // Handle Thumbnail - store URL for upload on save, don't upload immediately
-        const extractedImage = data.image || data.thumbnail || data.metadata?.image || data.metadata?.ogImage;
-        if (extractedImage) {
-          // Store for later upload and show preview using external URL
-          setPendingThumbnailUrl(extractedImage);
-          setFormData(prev => ({ ...prev, thumbnailUrl: extractedImage }));
-        }
-
-        const description = data.summary || (data.content ? data.content.substring(0, 200) + '...' : '')
-        const hasMarkdown = /(\*{1,2}|_{1,2}|`|#|\[|\]|\(|\)|>|-|\+|\d+\.)/g.test(description)
-        if (hasMarkdown) {
-          setShowDescriptionPreview(true)
-        }
-      } else {
-        throw new Error('Failed to extract content from the provided URL - Invalid response structure')
+      const description =
+        data.summary ||
+        (data.content ? data.content.substring(0, 200) + "..." : "");
+      const hasMarkdown = /(\*{1,2}|_{1,2}|`|#|\[|\]|\(|\)|>|-|\+|\d+\.)/g.test(
+        description
+      );
+      if (hasMarkdown) {
+        setShowDescriptionPreview(true);
       }
     } catch (error) {
-      let errorMessage = 'Failed to analyze URL'
+      let errorMessage = "Failed to analyze URL";
 
       if (error instanceof Error) {
-        if (error.message.includes('not a valid PDF')) {
-          errorMessage = 'PDF extraction failed. The downloaded content is not a valid PDF file. This usually means:\n• The URL requires login or authentication\n• The URL redirects to a preview/viewer page instead of the actual PDF\n• The server returned an error page or blocked the request\n• The URL points to a PDF viewer service rather than direct PDF file\n\nTry these working test URLs:\n• https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf\n• https://www.africau.edu/images/default/sample.pdf\n• https://file-examples.com/storage/fe68c1f7c66b447d2f7a8fa/2017/10/file_example_PDF_1MB.pdf'
-        } else if (error.message.includes('PDF')) {
-          errorMessage = 'PDF extraction failed. The file may be password-protected, behind authentication, or not accessible.'
-        } else if (error.message.includes('timeout')) {
-          errorMessage = 'Request timed out. The website may be slow or unresponsive.'
-        } else if (error.message.includes('blocked')) {
-          errorMessage = 'Access blocked. The website may be preventing automated access.'
-        } else if (error.message.includes('currently unavailable') || error.message.includes('service')) {
-          errorMessage = error.message
+        if (error.message.includes("not a valid PDF")) {
+          errorMessage =
+            "PDF extraction failed. The downloaded content is not a valid PDF file. This usually means:\n• The URL requires login or authentication\n• The URL redirects to a preview/viewer page instead of the actual PDF\n• The server returned an error page or blocked the request\n• The URL points to a PDF viewer service rather than direct PDF file\n\nTry these working test URLs:\n• https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf\n• https://www.africau.edu/images/default/sample.pdf\n• https://file-examples.com/storage/fe68c1f7c66b447d2f7a8fa/2017/10/file_example_PDF_1MB.pdf";
+        } else if (error.message.includes("PDF")) {
+          errorMessage =
+            "PDF extraction failed. The file may be password-protected, behind authentication, or not accessible.";
+        } else if (error.message.includes("timeout")) {
+          errorMessage =
+            "Request timed out. The website may be slow or unresponsive.";
+        } else if (error.message.includes("blocked")) {
+          errorMessage =
+            "Access blocked. The website may be preventing automated access.";
+        } else if (
+          error.message.includes("currently unavailable") ||
+          error.message.includes("service")
+        ) {
+          errorMessage = error.message;
         } else {
-          errorMessage = error.message || 'Failed to extract content from the provided URL'
+          errorMessage =
+            error.message || "Failed to extract content from the provided URL";
         }
       }
 
-      console.error('[handleAnalyzeUrl] Error:', errorMessage);
-      setExtractionError(errorMessage)
+      console.error("[handleAnalyzeUrl] Error:", errorMessage);
+      setExtractionError(errorMessage);
     } finally {
-      setIsAnalyzing(false)
+      setIsAnalyzing(false);
     }
-  }
+  };
 
   const addTag = (tag: string) => {
     if (tag && !formData.tags.includes(tag) && formData.tags.length < 10) {
       setFormData((prev) => ({
         ...prev,
         tags: [...prev.tags, tag],
-      }))
+      }));
     }
-    setNewTag("")
-  }
+    setNewTag("");
+  };
 
   const removeTag = (tagToRemove: string) => {
     setFormData((prev) => ({
       ...prev,
       tags: prev.tags.filter((tag) => tag !== tagToRemove),
-    }))
-  }
+    }));
+  };
 
   /**
    * Get or create tags and return their IDs
    */
-  const processTagsAndGetIds = async (tagNames: string[]): Promise<string[]> => {
+  const processTagsAndGetIds = async (
+    tagNames: string[]
+  ): Promise<string[]> => {
     const tagIds: string[] = [];
-
     for (const tagName of tagNames) {
       try {
         // First, try to find existing tag
-        const checkResponse = await fetch('/api/user-database/tags/get', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            tagName: tagName.trim()
-          })
-        });
+        const checkResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include", // Important for HttpOnly cookies
+            body: JSON.stringify({
+              tagName: tagName.trim(),
+            }),
+          }
+        );
 
         if (checkResponse.ok) {
           const existingTagResponse = await checkResponse.json();
-          if (existingTagResponse.success && existingTagResponse.found && existingTagResponse.tagId) {
+          if (
+            existingTagResponse.success &&
+            existingTagResponse.found &&
+            existingTagResponse.tagId
+          ) {
             tagIds.push(existingTagResponse.tagId);
             continue;
           }
         }
 
         // If tag doesn't exist, create it
-        const randomColor = `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0').toUpperCase()}`;
+        const randomColor = `#${Math.floor(Math.random() * 16777215)
+          .toString(16)
+          .padStart(6, "0")
+          .toUpperCase()}`;
 
-        const createResponse = await fetch('/api/user-database/tags/add', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            tagName: tagName.trim(),
-            colorCode: randomColor,
-            description: `Auto-generated tag for ${tagName.trim()}`,
-          })
-        });
+        const createResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/add`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              tagName: tagName.trim(),
+              colorCode: randomColor,
+              description: `Auto-generated tag for ${tagName.trim()}`,
+            }),
+          }
+        );
 
         if (createResponse.ok) {
           const newTagResponse = await createResponse.json();
@@ -433,7 +492,10 @@ export default function AddContentPage() {
             tagIds.push(newTagResponse.tagId);
           }
         } else {
-          console.error(`Failed to create tag: ${tagName}`, await createResponse.text());
+          console.error(
+            `Failed to create tag: ${tagName}`,
+            await createResponse.text()
+          );
         }
       } catch (error) {
         console.error(`Error processing tag ${tagName}:`, error);
@@ -444,19 +506,19 @@ export default function AddContentPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (!formData.title.trim()) {
-      alert('Please enter a title for your content.');
+      alert("Please enter a title for your content.");
       return;
     }
 
     if (!formData.url.trim()) {
-      alert('Please provide a URL for your content.');
+      alert("Please provide a URL for your content.");
       return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
     try {
       let tagIds: string[] = [];
@@ -500,7 +562,7 @@ export default function AddContentPage() {
       const contentData: ContentData = {
         link: formData.url,
         title: formData.title,
-        contentType: formData.type || 'article',
+        contentType: formData.type || "article",
         description: formData.description,
         rawContent: formData.rawContent, // Include extracted raw content
         personalNotes: formData.notes,
@@ -512,30 +574,25 @@ export default function AddContentPage() {
         contentData.thumbnailUrl = finalThumbnailUrl;
       }
 
-      // Get auth token for backend call
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
-      if (!token) {
-        throw new Error("You must be logged in to save content")
-      }
-
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-      const contentResponse = await fetch(`${backendUrl}/api/user-database/content/add`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(contentData)
-      });
+      const contentResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/add`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(contentData),
+        }
+      );
 
       if (contentResponse.ok) {
         await contentResponse.json();
 
         if (formData.tags.length > 0) {
-          alert(`Content "${formData.title}" saved successfully with ${formData.tags.length} tag(s)!`);
+          alert(
+            `Content "${formData.title}" saved successfully with ${formData.tags.length} tag(s)!`
+          );
         } else {
           alert(`Content "${formData.title}" saved successfully!`);
         }
@@ -554,42 +611,48 @@ export default function AddContentPage() {
         // Reset pending thumbnail state
         setPendingThumbnailBlob(null);
         setPendingThumbnailUrl("");
-
-        setSelectedFile(null)
+        setSelectedFile(null);
 
         router.push("/dashboard/memory-space");
       } else {
         const error = await contentResponse.json();
-        console.error('Failed to save content:', error);
-        alert(`Failed to save content: ${error.error?.message || error.error || 'Unknown error'}`);
+        console.error("Failed to save content:", error);
+        alert(
+          `Failed to save content: ${
+            error.error?.message || error.error || "Unknown error"
+          }`
+        );
       }
-
     } catch (error) {
-      console.error('Error saving content:', error);
-      alert('An error occurred while saving content. Please try again.');
+      console.error("Error saving content:", error);
+      alert("An error occurred while saving content. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   const generateVideoThumbnail = (file: File): Promise<Blob | null> => {
     return new Promise((resolve) => {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
+      const video = document.createElement("video");
+      video.preload = "metadata";
       video.onloadedmetadata = () => {
         video.currentTime = 1;
       };
       video.onseeked = () => {
         try {
-          const canvas = document.createElement('canvas');
+          const canvas = document.createElement("canvas");
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext("2d");
           if (ctx) {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            canvas.toBlob((blob) => {
-              resolve(blob);
-            }, 'image/jpeg', 0.8);
+            canvas.toBlob(
+              (blob) => {
+                resolve(blob);
+              },
+              "image/jpeg",
+              0.8
+            );
           } else {
             resolve(null);
           }
@@ -613,7 +676,7 @@ export default function AddContentPage() {
   const generatePdfThumbnail = async (file: File): Promise<Blob | null> => {
     try {
       // Dynamic import to avoid SSR issues
-      const pdfjsLib = await import('pdfjs-dist');
+      const pdfjsLib = await import("pdfjs-dist");
 
       // Set worker source to CDN for stability without complex Next.js config
       // Using a version compatible with the installed package (approximated)
@@ -625,8 +688,8 @@ export default function AddContentPage() {
       const page = await pdf.getPage(1);
 
       const viewport = page.getViewport({ scale: 1.5 }); // Good quality scale
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
 
       if (!context) return null;
 
@@ -635,14 +698,18 @@ export default function AddContentPage() {
 
       await page.render({
         canvasContext: context,
-        viewport: viewport
+        viewport: viewport,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).promise;
 
       return new Promise((resolve) => {
-        canvas.toBlob((blob) => {
-          resolve(blob);
-        }, 'image/jpeg', 0.8);
+        canvas.toBlob(
+          (blob) => {
+            resolve(blob);
+          },
+          "image/jpeg",
+          0.8
+        );
       });
     } catch (error) {
       console.error("Error generating PDF thumbnail:", error);
@@ -651,33 +718,37 @@ export default function AddContentPage() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    setSelectedFile(file)
-    setIsUploading(true)
-    setThumbnailAttempted(false) // Reset attempt state
-    setUploadProgress('Preparing upload...')
+    setSelectedFile(file);
+    setIsUploading(true);
+    setThumbnailAttempted(false); // Reset attempt state
+    setUploadProgress("Preparing upload...");
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('fileType', 'content')
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("fileType", "content");
 
-      setUploadProgress('Uploading file...')
+      setUploadProgress("Uploading file...");
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        }
+      );
 
       if (!response.ok) {
-        throw new Error('Upload failed')
+        throw new Error("Upload failed");
       }
 
-      const result = await response.json()
+      const result = await response.json();
 
-      setUploadProgress('Upload complete!')
+      setUploadProgress("Upload complete!");
 
       // Determine thumbnail - store locally instead of uploading immediately
       let localThumbnailPreview = "";
@@ -713,38 +784,37 @@ export default function AddContentPage() {
       setFormData((prev) => ({
         ...prev,
         url: result.fileUrl,
-        title: prev.title || result.originalName.replace(/\.[^/.]+$/, ''),
+        title: prev.title || result.originalName.replace(/\.[^/.]+$/, ""),
         type: prev.type || getFileType(result.fileType),
         thumbnailUrl: localThumbnailPreview || prev.thumbnailUrl
       }))
 
       setTimeout(() => {
-        setUploadProgress(null)
-      }, 2000)
-
+        setUploadProgress(null);
+      }, 2000);
     } catch (error) {
-      console.error('Upload error:', error)
-      setUploadProgress(null)
-      alert('Failed to upload file. Please try again.')
+      console.error("Upload error:", error);
+      setUploadProgress(null);
+      alert("Failed to upload file. Please try again.");
     } finally {
-      setIsUploading(false)
-      setThumbnailAttempted(true) // Mark as attempted
+      setIsUploading(false);
+      setThumbnailAttempted(true); // Mark as attempted
     }
-  }
+  };
 
   // Helper function to create local preview URL from blob (used for video/PDF thumbnails)
   // The actual upload happens in handleSubmit when the user saves
 
   const getFileType = (mimeType: string): string => {
-    if (mimeType.startsWith('image/')) return 'image'
-    if (mimeType.startsWith('video/')) return 'video'
-    if (mimeType === 'application/pdf') return 'pdf'
-    return 'other'
-  }
+    if (mimeType.startsWith("image/")) return "image";
+    if (mimeType.startsWith("video/")) return "video";
+    if (mimeType === "application/pdf") return "pdf";
+    return "other";
+  };
 
   return (
     <>
-      <div style={{ backgroundColor: '#f6f3ff', minHeight: '100vh' }}>
+      <div style={{ backgroundColor: "#f6f3ff", minHeight: "100vh" }}>
         <div className="max-w-4xl mx-auto space-y-4 sm:space-y-5 md:space-y-6 px-3 sm:px-4 md:px-6 py-4 sm:py-5 md:py-6">
           <ClientMeta page="quick-capture" personalized={true} />
 
@@ -1416,7 +1486,7 @@ export default function AddContentPage() {
                           <div
                             className="prose prose-sm max-w-none dark:prose-invert text-xs leading-relaxed"
                             dangerouslySetInnerHTML={{
-                              __html: convertMarkdownToHtml(formData.description)
+                              __html: convertMarkdownToHtml(formData.description),
                             }}
                           />
                         </div>
@@ -1425,7 +1495,12 @@ export default function AddContentPage() {
                           id="description"
                           placeholder="Brief description of the content"
                           value={formData.description}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                          onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
                           rows={4}
                           className="text-sm bg-white/80 border-violet-200/60 focus:border-violet-400 focus:ring-violet-400/20 focus:ring-2 rounded-lg shadow-sm transition-all duration-200 resize-none"
                         />
@@ -1457,13 +1532,17 @@ export default function AddContentPage() {
                       <Label className="text-sm text-slate-900">Add Tags</Label>
                       <div className="flex gap-3">
                         <Input
-                          placeholder={formData.tags.length >= 10 ? "Maximum 10 tags reached" : "Add a tag"}
+                          placeholder={
+                        formData.tags.length >= 10
+                          ? "Maximum 10 tags reached"
+                          : "Add a tag"
+                      }
                           value={newTag}
                           onChange={(e) => setNewTag(e.target.value)}
                           onKeyPress={(e) => {
                             if (e.key === "Enter") {
-                              e.preventDefault()
-                              addTag(newTag)
+                              e.preventDefault();
+                              addTag(newTag);
                             }
                           }}
                           disabled={formData.tags.length >= 10}
@@ -1587,5 +1666,5 @@ export default function AddContentPage() {
         </div>
       </div>
     </>
-  )
+  );
 }
