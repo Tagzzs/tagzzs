@@ -155,7 +155,7 @@ export function CalendarWidget() {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+      {/* <div className="flex items-center gap-4 text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
           <Circle className="h-3 w-3 fill-blue-500 text-blue-500" />
           <span>Tags</span>
@@ -164,7 +164,7 @@ export function CalendarWidget() {
           <Circle className="h-3 w-3 fill-green-500 text-green-500" />
           <span>Content</span>
         </div>
-      </div>
+      </div> */}
 
       {/* Selected Date Details */}
       {selectedDate && (
