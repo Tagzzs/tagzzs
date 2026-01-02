@@ -110,6 +110,17 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       setIsLoading(true);
       setError(null);
 
+      // Get auth token
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.')
+      }
+
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+
       // Fetch content data
       const contentResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`,
