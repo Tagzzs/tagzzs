@@ -52,11 +52,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (data.success && data.user) {
             setUser(data.user);
           } else {
+            // Invalid data format, treat as logged out
+            console.warn("Invalid session data received");
+            // We don't necessarily want to force signout here unless we are sure,
+            // but user should be null.
             setUser(null);
           }
         } else {
-          // If 401, potentially try refresh or just set null
-          setUser(null);
+          // If 401, it means the token is invalid or USER DOES NOT EXIST
+          // We must force signout to clear the cookies so middleware doesn't think we are logged in
+          if (response.status === 401) {
+            console.log(
+              "Session invalid or user deleted. clearing cookies silently..."
+            );
+            // Perform silent cleanup - do not use signOut() as it toggles loading/redirects
+            try {
+              await fetch(
+                `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-out`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                }
+              );
+            } catch (e) {
+              console.error("Silent signout failed", e);
+            }
+            setUser(null);
+          } else {
+            setUser(null);
+          }
         }
       } catch (error) {
         console.error("Session check error:", error);

@@ -73,6 +73,8 @@ interface ExtensionData {
   totalCount: number;
 }
 
+import { useAuth } from "@/contexts/AuthContext";
+
 export function PrivacyTab() {
   const [showPreviousConnections, setShowPreviousConnections] = useState(false);
   const [isConnectionDetailsOpen, setIsConnectionDetailsOpen] = useState(false);
@@ -95,9 +97,14 @@ export function PrivacyTab() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
+  // Delete Account State
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
   const router = useRouter();
   const { toast } = useToast();
   const supabase = createClient();
+  const { signOut } = useAuth(); // Use centralized signOut
 
   // Adding user state
   const [user, setUser] = useState<any>(null);
@@ -327,6 +334,42 @@ export function PrivacyTab() {
       setPasswordError("An unexpected error occurred. Please try again.");
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/delete`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete account");
+      }
+
+      toast({
+        title: "Account Deleted",
+        description: "Your account has been permanently deleted.",
+      });
+
+      // Force sign out on client
+      await signOut();
+    } catch (error) {
+      console.error("Delete account error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete account. Please try again.",
+        variant: "destructive",
+      });
+      setIsDeletingAccount(false);
     }
   };
 
@@ -935,6 +978,60 @@ export function PrivacyTab() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Danger Zone */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold text-red-600 mb-6">Danger Zone</h3>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h4 className="font-medium text-red-900 mb-2">Delete Account</h4>
+          <p className="text-sm text-red-700 mb-4">
+            Permanently delete your account and all of your content. This action
+            cannot be undone.
+          </p>
+          <Button
+            variant="destructive"
+            className="bg-red-600 hover:bg-red-700"
+            onClick={() => setIsDeleteAccountOpen(true)}
+          >
+            Delete Account
+          </Button>
+        </div>
+      </div>
+
+      {/* Confirm Delete Account Dialog */}
+      <Dialog open={isDeleteAccountOpen} onOpenChange={setIsDeleteAccountOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Are you absolutely sure?</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently delete your
+              account and remove your data from our servers.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteAccountOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={isDeletingAccount}
+            >
+              {isDeletingAccount ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Account"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

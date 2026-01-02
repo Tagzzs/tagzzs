@@ -6,6 +6,9 @@ FastAPI application with modular route structure.
 
 from app.config import load_environment
 
+# Load environment variables FIRST before importing any other modules that might rely on them
+load_environment()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -28,7 +31,6 @@ from app.api import (
     extension_router,
 )
 
-load_environment()
 
 app = FastAPI(title="Tagzzs Backend", version="1.0.0")
 
