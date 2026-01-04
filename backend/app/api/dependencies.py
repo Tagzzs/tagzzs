@@ -1,7 +1,7 @@
 import os
 import jwt
 from fastapi import Request, HTTPException
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 
@@ -20,6 +20,7 @@ async def get_current_user(request: Request) -> Dict[str, Any]:
             token = auth_header.split(" ")[1]
 
     if not token:
+        print("get_current_user: No token found in cookies or Authorization header.")
         raise HTTPException(status_code=401, detail="Authentication required")
 
     if not SUPABASE_JWT_SECRET:
@@ -46,3 +47,17 @@ async def get_current_user(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+
+async def get_optional_user(request: Request) -> Optional[Dict[str, Any]]:
+    """
+    Dependency to get the current user if available, else return None.
+    Does not raise 401.
+    """
+    try:
+        return await get_current_user(request)
+    except HTTPException as e:
+        print(f"get_optional_user failed: {e.detail}")
+        if e.status_code == 401:
+            return None
+        raise e

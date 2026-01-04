@@ -43,7 +43,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
 
 interface TagItem {
   id: string;

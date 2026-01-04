@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { ClientMeta } from "@/components/client-meta";
-import { createClient } from "@/utils/supabase/client";
 
 interface ContentItem {
   id: string;

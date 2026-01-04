@@ -34,7 +34,7 @@ function checkRateLimit(key: string){
  */
 
 export async function POST(req: Request) {
-  const startTime = Date.now();
+  
   let email: string | null = null;
 
   try {

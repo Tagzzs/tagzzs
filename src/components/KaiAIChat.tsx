@@ -12,10 +12,7 @@ import {
   ChevronUp,
   Book,
   Globe,
-  Database,
-  MessageSquare,
 } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 
 interface Message {
   id: string;
@@ -416,15 +413,6 @@ export default function KaiAIChat() {
       steps[stepName || ""] ||
       defaultName.charAt(0).toUpperCase() + defaultName.slice(1)
     );
-  };
-
-  const getStepIcon = (stepName: string) => {
-    if (stepName === "web_search") return <Globe className="w-3 h-3" />;
-    if (stepName === "search_knowledge_base")
-      return <Database className="w-3 h-3" />;
-    if (stepName === "final_answer")
-      return <MessageSquare className="w-3 h-3" />;
-    return <Sparkles className="w-3 h-3" />;
   };
 
   return (

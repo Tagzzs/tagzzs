@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Download, HardDrive, AlertTriangle } from "lucide-react";
+import { Download, HardDrive } from "lucide-react";
 
 export function DataTab() {
   return (

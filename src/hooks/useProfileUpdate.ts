@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import { useToast } from "./use-toast";
 import { useUserProfile } from "./useUserProfile";
-import { createClient } from "@/utils/supabase/client";
 
 interface ProfileUpdateData {
   name?: string;

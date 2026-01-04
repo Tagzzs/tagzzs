@@ -40,6 +40,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
 // firebase imports removed
+import { User } from "@supabase/supabase-js";
 
 interface ExtensionConnection {
   id: string;
@@ -107,7 +108,7 @@ export function PrivacyTab() {
   const { signOut } = useAuth(); // Use centralized signOut
 
   // Adding user state
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   // Get user session on load from supabase
   useEffect(() => {
@@ -132,7 +133,7 @@ export function PrivacyTab() {
     return res.json();
   };
 
-  const { data, error, isLoading } = useSWR(
+  const { data, error } = useSWR(
     user ? "/api/extension/connections" : null,
     authorizedFetcher,
     {

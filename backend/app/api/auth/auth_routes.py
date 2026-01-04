@@ -6,7 +6,53 @@ from fastapi.responses import RedirectResponse
 from app.api.auth.schemas import SignUpRequest, SignInRequest
 from app.api.auth.supabase_client import get_supabase, get_supabase_admin
 from app.services.firebase.firebase_user_service import FirebaseUserService
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, get_optional_user
+
+
+# Environment Check for Cookie Security
+# We assume production if the backend URL starts with https
+backend_url = os.environ.get("NEXT_PUBLIC_BACKEND_URL", "")
+IS_PRODUCTION = backend_url.startswith("https://")
+
+
+def get_cookie_domain(url: str) -> Optional[str]:
+    """
+    Extracts the base domain (e.g., .tagzzs.com) from a URL.
+    This allows cookies to be shared across subdomains (api.tagzzs.com -> app.tagzzs.com).
+    """
+    if not url or "localhost" in url or "127.0.0.1" in url:
+        return None
+
+    from urllib.parse import urlparse
+
+    try:
+        hostname = urlparse(url).hostname
+        if not hostname:
+            return None
+
+        # Split by dot
+        parts = hostname.split(".")
+
+        # If we have 2+ parts (e.g. api.tagzzs.com or tagzzs.com)
+        # We want the last 2 parts for the root domain (tagzzs.com)
+        # Prepend with dot for wildcard matching
+        if len(parts) >= 2:
+            return f".{'.'.join(parts[-2:])}"
+        return None
+    except Exception:
+        return None
+
+
+COOKIE_PARAMS = {
+    "httponly": True,
+    "secure": IS_PRODUCTION,
+    "samesite": "none" if IS_PRODUCTION else "lax",
+}
+
+if IS_PRODUCTION:
+    domain = get_cookie_domain(backend_url)
+    if domain:
+        COOKIE_PARAMS["domain"] = domain
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -17,7 +63,6 @@ async def login_google(request: Request):
     """
     Initiates the Google OAuth flow with manual PKCE.
     """
-    supabase = get_supabase()
 
     # Determine Backend URL for the callback
     backend_url = os.environ.get("NEXT_PUBLIC_BACKEND_URL")
@@ -67,17 +112,17 @@ async def login_google(request: Request):
     response.set_cookie(
         key="auth_code_verifier",
         value=verifier,
-        httponly=True,
-        secure=False,  # Set to True in production
-        samesite="lax",
         max_age=600,  # 10 minutes expiration
+        **COOKIE_PARAMS,
     )
 
     return response
 
 
 @router.get("/callback")
-async def auth_callback(code: str, request: Request, response: Response):
+async def auth_callback(
+    request: Request, response: Response, code: Optional[str] = None
+):
     """
     Exchanges the auth code for a session using the stored PKCE verifier.
     """
@@ -153,9 +198,7 @@ async def auth_callback(code: str, request: Request, response: Response):
             if not user_data.data.get("name"):
                 is_complete = False
 
-        frontend_url = os.environ.get(
-            "NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000"
-        )
+        frontend_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL")
 
         target_path = "/dashboard" if is_complete else "/onboarding"
         redirect_to = f"{frontend_url}{target_path}"
@@ -166,18 +209,14 @@ async def auth_callback(code: str, request: Request, response: Response):
         redirect_resp.set_cookie(
             key="access_token",
             value=res.session.access_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
             max_age=res.session.expires_in,
+            **COOKIE_PARAMS,
         )
         redirect_resp.set_cookie(
             key="refresh_token",
             value=res.session.refresh_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
             max_age=30 * 24 * 60 * 60,
+            **COOKIE_PARAMS,
         )
 
         # Clear the verifier cookie
@@ -280,18 +319,14 @@ async def sign_up(body: SignUpRequest, response: Response):
         response.set_cookie(
             key="access_token",
             value=res.session.access_token,
-            httponly=True,
-            secure=False,  # Set to False for localhost development
-            samesite="lax",
             max_age=res.session.expires_in,
+            **COOKIE_PARAMS,
         )
         response.set_cookie(
             key="refresh_token",
             value=res.session.refresh_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
             max_age=30 * 24 * 60 * 60,  # 30 days roughly
+            **COOKIE_PARAMS,
         )
 
     # Return success response (Sensitized)
@@ -358,18 +393,14 @@ async def sign_in(body: SignInRequest, response: Response):
     response.set_cookie(
         key="access_token",
         value=auth_res.session.access_token,
-        httponly=True,
-        secure=False,  # False for localhost
-        samesite="lax",
         max_age=auth_res.session.expires_in,
+        **COOKIE_PARAMS,
     )
     response.set_cookie(
         key="refresh_token",
         value=auth_res.session.refresh_token,
-        httponly=True,
-        secure=False,
-        samesite="lax",
         max_age=30 * 24 * 60 * 60,  # 30 days
+        **COOKIE_PARAMS,
     )
 
     # Return success response (Sensitized - no tokens in body)
@@ -404,9 +435,18 @@ async def sign_out(request: Request, response: Response):
             # We ignore errors here because we are clearing cookies anyway
             pass
 
-        # Clear Cookies
-        response.delete_cookie(key="access_token", httponly=True, samesite="lax")
-        response.delete_cookie(key="refresh_token", httponly=True, samesite="lax")
+        # Clear Cookies using the same params (except max_age) to ensure they are found and deleted
+        # Note: delete_cookie arguments must match set_cookie for domain/path/secure/httponly in some browsers
+        delete_params = {
+            "httponly": True,
+            "samesite": COOKIE_PARAMS["samesite"],
+            "secure": COOKIE_PARAMS["secure"],
+        }
+        if "domain" in COOKIE_PARAMS:
+            delete_params["domain"] = COOKIE_PARAMS["domain"]
+
+        response.delete_cookie(key="access_token", **delete_params)
+        response.delete_cookie(key="refresh_token", **delete_params)
 
         # Return success response
         return {
@@ -433,13 +473,16 @@ async def sign_out(request: Request, response: Response):
 
 
 @router.get("/me")
-async def get_me(user: Dict[str, Any] = Depends(get_current_user)):
+async def get_me(user: Optional[Dict[str, Any]] = Depends(get_optional_user)):
     """
     Returns the current user based on HttpOnly cookie, verifying they exist in the DB.
     """
+    if not user:
+        return {"success": True, "user": None, "profile": None}
+
     user_id = user.get("id")
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token data")
+        return {"success": True, "user": None, "profile": None}
 
     admin_supabase = get_supabase_admin()
 
@@ -504,8 +547,18 @@ async def delete_account(
         admin_supabase.auth.admin.delete_user(user_id)
 
         # 3. Clear Cookies
-        response.delete_cookie(key="access_token", httponly=True, samesite="lax")
-        response.delete_cookie(key="refresh_token", httponly=True, samesite="lax")
+        response.delete_cookie(
+            key="access_token",
+            httponly=True,
+            samesite=COOKIE_PARAMS["samesite"],
+            secure=COOKIE_PARAMS["secure"],
+        )
+        response.delete_cookie(
+            key="refresh_token",
+            httponly=True,
+            samesite=COOKIE_PARAMS["samesite"],
+            secure=COOKIE_PARAMS["secure"],
+        )
 
         return {"success": True, "message": "Account deleted successfully"}
 
@@ -537,18 +590,14 @@ async def refresh_session(request: Request, response: Response):
         response.set_cookie(
             key="access_token",
             value=res.session.access_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
             max_age=res.session.expires_in,
+            **COOKIE_PARAMS,
         )
         response.set_cookie(
             key="refresh_token",
             value=res.session.refresh_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
             max_age=30 * 24 * 60 * 60,
+            **COOKIE_PARAMS,
         )
 
         return {"success": True, "user": {"id": res.user.id, "email": res.user.email}}

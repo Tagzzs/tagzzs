@@ -37,7 +37,6 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { marked } from "marked";
-import { createClient } from "@/utils/supabase/client";
 
 // Configure marked for safe HTML output
 marked.setOptions({
@@ -148,6 +147,7 @@ export default function AddContentPage() {
 
       // Check if we have success with content
       if (result.content) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data = result.content as any; // Type assertion for now since we don't have the backend types imported
 
         console.log("[handleAnalyzeUrl] Extracted content:", data);

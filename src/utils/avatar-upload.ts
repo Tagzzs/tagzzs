@@ -1,5 +1,3 @@
-import { createClient } from "./supabase/client";
-
 export interface UploadOptions {
   maxSizeMB?: number;
   allowedTypes?: string[];

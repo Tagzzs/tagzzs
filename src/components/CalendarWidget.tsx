@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import {
   ChevronLeft,
   ChevronRight,
-  Circle,
 } from "lucide-react";
 
 export function CalendarWidget() {

@@ -111,15 +111,15 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       setError(null);
 
       // Get auth token
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
       if (!token) {
-        throw new Error('Authentication required. Please log in again.')
+        throw new Error("Authentication required. Please log in again.");
       }
-
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
       // Fetch content data
       const contentResponse = await fetch(
@@ -294,13 +294,9 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       setIsSaving(true);
 
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const userId = session?.user?.id;
-
-      if (!userId) throw new Error("User not found");
+      await supabase.auth.getSession();
+      // const token = session?.access_token;
+      // const userId = session?.user?.id;
 
       // Make API call to update content notes
       const response = await fetch(
@@ -357,11 +353,9 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       setIsDeleting(true);
 
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const userId = session?.user?.id;
+      await supabase.auth.getSession();
+      // const token = session?.access_token;
+      // const userId = session?.user?.id;
 
       // Make API call to delete content
       const response = await fetch(
@@ -515,7 +509,10 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
   return (
     <>
-      <div style={{ backgroundColor: '#f6f3ff' }} className="min-h-screen pt-3 pb-8">
+      <div
+        style={{ backgroundColor: "#f6f3ff" }}
+        className="min-h-screen pt-3 pb-8"
+      >
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Back button with Navigation */}
           <div className="flex items-center justify-between mb-6">

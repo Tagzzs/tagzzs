@@ -16,7 +16,7 @@ import { LogOut, Settings } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export function UserProfile() {
-  const { user, loading, signOut } = useAuth()
+  const { user, loading } = useAuth()
   const router = useRouter()
 
   if (loading) {
@@ -53,7 +53,7 @@ export function UserProfile() {
         },
       });
 
-      const data = await response.json();
+      await response.json();
 
       // Manually removing browser cookies
       const { createClient: createBrowserClient } = await import("@/utils/supabase/client");

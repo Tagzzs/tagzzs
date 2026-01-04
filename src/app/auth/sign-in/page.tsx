@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { PublicRoute } from "../../../components/auth-guard";
 import { LoadingScreen } from "@/components/ui/loading-screen";
+import { useAuth } from "@/contexts/AuthContext";
 import "./auth-theme.css";
 
 export default function SignInPage() {
@@ -34,6 +35,7 @@ export default function SignInPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { checkAuth } = useAuth();
 
   // Detect if sign-in is from extension
   const isExtensionAuth = searchParams.get("source") === "extension";
@@ -185,7 +187,8 @@ export default function SignInPage() {
         }
       } else {
         // Successful sign-in
-        // No need to set session manually, cookies are handled by browser
+        // Update session state manually before redirecting
+        await checkAuth();
 
         toast({
           title: "Welcome back!",

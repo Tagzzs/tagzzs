@@ -13,7 +13,7 @@ def load_environment():
     1. .env.local (for local development with sensitive credentials)
     2. .env (fallback for non-sensitive configuration)
     """
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[1]
 
     for env_file in [".env.local", ".env"]:
         env_path = repo_root / env_file
