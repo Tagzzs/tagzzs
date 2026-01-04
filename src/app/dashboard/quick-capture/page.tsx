@@ -33,10 +33,12 @@ import {
   Sparkles,
   Check,
   Loader2,
-  ImageIcon, Youtube, ArrowLeft,
+  ImageIcon,
+  Youtube,
+  ArrowLeft,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/utils/supabase/client"
+import { createClient } from "@/utils/supabase/client";
 import { marked } from "marked";
 
 // Configure marked for safe HTML output
@@ -79,15 +81,22 @@ const suggestedTags = [
   "Backend",
   "Frontend",
   "Mobile",
-]
+];
 
 // YouTube domain validation
-const YOUTUBE_DOMAINS = ["youtube.com", "youtu.be", "m.youtube.com", "www.youtube.com"];
+const YOUTUBE_DOMAINS = [
+  "youtube.com",
+  "youtu.be",
+  "m.youtube.com",
+  "www.youtube.com",
+];
 
 function isYouTubeUrl(url: string): boolean {
   try {
     const parsedUrl = new URL(url);
-    return YOUTUBE_DOMAINS.some(domain => parsedUrl.hostname.includes(domain));
+    return YOUTUBE_DOMAINS.some((domain) =>
+      parsedUrl.hostname.includes(domain)
+    );
   } catch {
     return false;
   }
@@ -129,88 +138,101 @@ export default function AddContentPage() {
     tags: [] as string[],
     thumbnailUrl: "", // NEW: Added thumbnail URL
     rawContent: "", // Store extracted raw content from API
-  })
-  const [newTag, setNewTag] = useState("")
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [extractionError, setExtractionError] = useState<string | null>(null)
-  const [showDescriptionPreview, setShowDescriptionPreview] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
-  const [thumbnailAttempted, setThumbnailAttempted] = useState(false)
+  });
+  const [newTag, setNewTag] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [showDescriptionPreview, setShowDescriptionPreview] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+  const [thumbnailAttempted, setThumbnailAttempted] = useState(false);
   // Pending thumbnail state - stores blob/file for upload on save
-  const [pendingThumbnailBlob, setPendingThumbnailBlob] = useState<Blob | null>(null)
-  const [pendingThumbnailUrl, setPendingThumbnailUrl] = useState<string>("") // External URL to upload from
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  const [pendingThumbnailBlob, setPendingThumbnailBlob] = useState<Blob | null>(
+    null
+  );
+  const [pendingThumbnailUrl, setPendingThumbnailUrl] = useState<string>(""); // External URL to upload from
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   // YouTube requestId mode state
-  const [requestId, setRequestId] = useState<string | null>(null)
-  const [youtubeResult, setYoutubeResult] = useState<YouTubeExtractionResult | null>(null)
-  const [isLoadingYoutubeResult, setIsLoadingYoutubeResult] = useState(false)
-  const [youtubeResultError, setYoutubeResultError] = useState<string | null>(null)
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [youtubeResult, setYoutubeResult] =
+    useState<YouTubeExtractionResult | null>(null);
+  const [isLoadingYoutubeResult, setIsLoadingYoutubeResult] = useState(false);
+  const [youtubeResultError, setYoutubeResultError] = useState<string | null>(
+    null
+  );
 
   // Check for requestId in URL params and fetch YouTube result
   useEffect(() => {
-    const reqId = searchParams.get('requestId')
+    const reqId = searchParams.get("requestId");
     if (reqId) {
-      setRequestId(reqId)
-      setIsLoadingYoutubeResult(true)
-      setYoutubeResultError(null)
+      setRequestId(reqId);
+      setIsLoadingYoutubeResult(true);
+      setYoutubeResultError(null);
 
       const fetchYoutubeResult = async () => {
         try {
-          const supabase = createClient()
-          const { data: { session } } = await supabase.auth.getSession()
-          const token = session?.access_token
+          const supabase = createClient();
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const token = session?.access_token;
 
-          if (!token) throw new Error("Authentication required")
+          if (!token) throw new Error("Authentication required");
 
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-          const response = await fetch(`${backendUrl}/youtube/result?id=${reqId}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
+          const backendUrl =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+          const response = await fetch(
+            `${backendUrl}/youtube/result?id=${reqId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
             }
-          })
+          );
 
           if (!response.ok) {
-            throw new Error('Failed to fetch extraction result')
+            throw new Error("Failed to fetch extraction result");
           }
 
-          const result = await response.json()
+          const result = await response.json();
 
           if (result.error && !result.success) {
-            throw new Error(result.error)
+            throw new Error(result.error);
           }
 
-          setYoutubeResult(result)
+          setYoutubeResult(result);
 
           // If result has data, populate form for saving
-          if (result.data && result.status === 'completed') {
-            const { content, metadata } = result.data
-            setFormData(prev => ({
+          if (result.data && result.status === "completed") {
+            const { content, metadata } = result.data;
+            setFormData((prev) => ({
               ...prev,
               url: result.videoUrl,
-              title: content?.title || '',
-              description: content?.summary || content?.description || '',
-              type: metadata?.detectedCategory || 'video',
+              title: content?.title || "",
+              description: content?.summary || content?.description || "",
+              type: metadata?.detectedCategory || "video",
               tags: content?.tags || [],
-              thumbnailUrl: metadata?.thumbnailUrl || '',
-              rawContent: content?.rawContent || ''
-            }))
+              thumbnailUrl: metadata?.thumbnailUrl || "",
+              rawContent: content?.rawContent || "",
+            }));
           }
         } catch (err) {
-          setYoutubeResultError(err instanceof Error ? err.message : 'Failed to load result')
+          setYoutubeResultError(
+            err instanceof Error ? err.message : "Failed to load result"
+          );
         } finally {
-          setIsLoadingYoutubeResult(false)
+          setIsLoadingYoutubeResult(false);
         }
-      }
+      };
 
-      fetchYoutubeResult()
+      fetchYoutubeResult();
     }
-  }, [searchParams])
+  }, [searchParams]);
 
   // Auto-analyze URL when it changes - fetch thumbnail but don't upload yet
   useEffect(() => {
@@ -225,7 +247,7 @@ export default function AddContentPage() {
         setIsGeneratingThumbnail(true);
         setPendingThumbnailBlob(null);
         setPendingThumbnailUrl("");
-        setFormData(prev => ({ ...prev, thumbnailUrl: '' }));
+        setFormData((prev) => ({ ...prev, thumbnailUrl: "" }));
 
         // Debounce
         const timer = setTimeout(async () => {
@@ -248,7 +270,10 @@ export default function AddContentPage() {
               if (data.thumbnailUrl) {
                 // Store the URL for upload on save - show preview using the external URL
                 setPendingThumbnailUrl(data.thumbnailUrl);
-                setFormData(prev => ({ ...prev, thumbnailUrl: data.thumbnailUrl }));
+                setFormData((prev) => ({
+                  ...prev,
+                  thumbnailUrl: data.thumbnailUrl,
+                }));
               }
             }
           } catch (e) {
@@ -279,40 +304,49 @@ export default function AddContentPage() {
       // Check if it's a YouTube URL - handle differently
       if (isYouTubeUrl(formData.url)) {
         // Queue the YouTube URL for extraction
-        const supabase = createClient()
-        const { data: { session } } = await supabase.auth.getSession()
-        const token = session?.access_token
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token;
 
         if (!token) {
-          console.error("No access token found for YouTube queueing")
-          throw new Error("You must be logged in to use YouTube extraction")
+          console.error("No access token found for YouTube queueing");
+          throw new Error("You must be logged in to use YouTube extraction");
         }
 
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+        const backendUrl =
+          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
         const queueResponse = await fetch(`${backendUrl}/youtube/queue`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            url: formData.url
-          })
-        })
+            url: formData.url,
+          }),
+        });
 
         if (!queueResponse.ok) {
           const errorData = await queueResponse.json().catch(() => ({}));
-          throw new Error(errorData.detail || errorData.error || `Failed to queue YouTube extraction`)
+          throw new Error(
+            errorData.detail ||
+              errorData.error ||
+              `Failed to queue YouTube extraction`
+          );
         }
 
-        const queueResult = await queueResponse.json()
+        const queueResult = await queueResponse.json();
 
         if (queueResult.success && queueResult.requestId) {
           // Redirect to drafts page
-          router.push('/dashboard/youtube-drafts')
-          return
+          router.push("/dashboard/youtube-drafts");
+          return;
         } else {
-          throw new Error(queueResult.error || 'Failed to queue YouTube extraction')
+          throw new Error(
+            queueResult.error || "Failed to queue YouTube extraction"
+          );
         }
       }
 
@@ -348,29 +382,31 @@ export default function AddContentPage() {
         throw new Error(data.error || "Failed to extract content");
       }
 
+      const content = data.content || {};
+      const metadata = data.metadata || {};
+
       setFormData((prev) => ({
         ...prev,
         title:
-          data.title && data.title !== "Untitled" ? data.title : prev.title,
+          content.title && content.title !== "Untitled"
+            ? content.title
+            : prev.title,
         description:
-          data.summary ||
-          (data.content
-            ? data.content.substring(0, 200) + "..."
+          content.summary ||
+          (content.rawContent
+            ? content.rawContent.substring(0, 200) + "..."
             : prev.description),
-        type: data.content_type || "article",
-        tags: data.tags ? data.tags.slice(0, 10) : [],
-        rawContent: data.raw_content || "",
+        type: metadata.contentType || "article",
+        tags: content.tags ? content.tags.slice(0, 10) : [],
+        rawContent: content.rawContent || "",
       }));
 
-      // Handle Thumbnail Upload if present (optional, usually backend handles it or separate flow)
-      // We will skip explicit thumbnail upload here as backend response includes metadata
-      // and useEffect hook handles 'auto-fetch thumbnail' separately for the form state.
-      // But if we want to ensure the thumbnail from refine is used:
-      // data.metadata?.thumbnail_url might be present.
-
+      // Handle Thumbnail Upload if present.
       const description =
-        data.summary ||
-        (data.content ? data.content.substring(0, 200) + "..." : "");
+        content.summary ||
+        (content.rawContent
+          ? content.rawContent.substring(0, 200) + "..."
+          : "");
       const hasMarkdown = /(\*{1,2}|_{1,2}|`|#|\[|\]|\(|\)|>|-|\+|\d+\.)/g.test(
         description
       );
@@ -527,28 +563,28 @@ export default function AddContentPage() {
       }
 
       // Upload pending thumbnail if exists (blob or URL)
-      let finalThumbnailUrl = '';
+      let finalThumbnailUrl = "";
       if (pendingThumbnailBlob) {
         // Upload blob directly
         const thumbFormData = new FormData();
-        thumbFormData.append('file', pendingThumbnailBlob, 'thumbnail.jpg');
-        thumbFormData.append('fileType', 'thumbnail');
+        thumbFormData.append("file", pendingThumbnailBlob, "thumbnail.jpg");
+        thumbFormData.append("fileType", "thumbnail");
 
-        const thumbResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: thumbFormData
+        const thumbResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: thumbFormData,
         });
 
         if (thumbResponse.ok) {
           const thumbResult = await thumbResponse.json();
-          finalThumbnailUrl = thumbResult.fileUrl || '';
+          finalThumbnailUrl = thumbResult.fileUrl || "";
         }
       } else if (pendingThumbnailUrl) {
         // Upload from external URL
-        const uploadResponse = await fetch('/api/upload/from-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl: pendingThumbnailUrl })
+        const uploadResponse = await fetch("/api/upload/from-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUrl: pendingThumbnailUrl }),
         });
 
         if (uploadResponse.ok) {
@@ -755,14 +791,14 @@ export default function AddContentPage() {
       let thumbBlob: Blob | null = null;
 
       // 1. If Image: Use the uploaded file URL directly (already uploaded as content)
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith("image/")) {
         // For images, the content itself is the thumbnail - store the URL
         setPendingThumbnailUrl(result.fileUrl);
         localThumbnailPreview = result.fileUrl;
       }
       // 2. If Video: Generate thumbnail from file but don't upload yet
-      else if (file.type.startsWith('video/')) {
-        setUploadProgress('Generating thumbnail...');
+      else if (file.type.startsWith("video/")) {
+        setUploadProgress("Generating thumbnail...");
         thumbBlob = await generateVideoThumbnail(file);
         if (thumbBlob) {
           localThumbnailPreview = URL.createObjectURL(thumbBlob);
@@ -771,8 +807,8 @@ export default function AddContentPage() {
         }
       }
       // 3. If PDF: Generate thumbnail from first page but don't upload yet
-      else if (file.type === 'application/pdf') {
-        setUploadProgress('Generating PDF preview...');
+      else if (file.type === "application/pdf") {
+        setUploadProgress("Generating PDF preview...");
         thumbBlob = await generatePdfThumbnail(file);
         if (thumbBlob) {
           localThumbnailPreview = URL.createObjectURL(thumbBlob);
@@ -786,8 +822,8 @@ export default function AddContentPage() {
         url: result.fileUrl,
         title: prev.title || result.originalName.replace(/\.[^/.]+$/, ""),
         type: prev.type || getFileType(result.fileType),
-        thumbnailUrl: localThumbnailPreview || prev.thumbnailUrl
-      }))
+        thumbnailUrl: localThumbnailPreview || prev.thumbnailUrl,
+      }));
 
       setTimeout(() => {
         setUploadProgress(null);
@@ -825,7 +861,7 @@ export default function AddContentPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => router.push('/dashboard/youtube-drafts')}
+                  onClick={() => router.push("/dashboard/youtube-drafts")}
                   className="text-violet-600 hover:text-violet-700 hover:bg-violet-50"
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />
@@ -848,7 +884,9 @@ export default function AddContentPage() {
                 <Card className="border border-violet-200/60 shadow-lg bg-white/80">
                   <CardContent className="flex flex-col items-center justify-center py-16">
                     <Loader2 className="w-8 h-8 text-violet-500 animate-spin mb-4" />
-                    <p className="text-slate-600">Loading extraction result...</p>
+                    <p className="text-slate-600">
+                      Loading extraction result...
+                    </p>
                   </CardContent>
                 </Card>
               )}
@@ -861,10 +899,14 @@ export default function AddContentPage() {
                       <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <X className="w-6 h-6 text-red-500" />
                       </div>
-                      <h3 className="font-semibold text-slate-900 mb-2">Failed to Load</h3>
-                      <p className="text-sm text-red-600 mb-4">{youtubeResultError}</p>
+                      <h3 className="font-semibold text-slate-900 mb-2">
+                        Failed to Load
+                      </h3>
+                      <p className="text-sm text-red-600 mb-4">
+                        {youtubeResultError}
+                      </p>
                       <Button
-                        onClick={() => router.push('/dashboard/youtube-drafts')}
+                        onClick={() => router.push("/dashboard/youtube-drafts")}
                         variant="outline"
                         className="border-violet-200 text-violet-700"
                       >
@@ -876,147 +918,195 @@ export default function AddContentPage() {
               )}
 
               {/* Pending/Processing State */}
-              {youtubeResult && youtubeResult.status !== 'completed' && !isLoadingYoutubeResult && (
-                <Card className="border border-amber-200/60 shadow-lg bg-white/80">
-                  <CardContent className="py-8">
-                    <div className="text-center">
-                      <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto mb-4" />
-                      <h3 className="font-semibold text-slate-900 mb-2">Still Processing</h3>
-                      <p className="text-sm text-slate-600 mb-4">
-                        Your video is still being analyzed. Please check back in a moment.
-                      </p>
-                      <Button
-                        onClick={() => window.location.reload()}
-                        variant="outline"
-                        className="border-violet-200 text-violet-700"
-                      >
-                        Refresh
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Completed Result View */}
-              {youtubeResult && youtubeResult.status === 'completed' && youtubeResult.data && !isLoadingYoutubeResult && (
-                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 md:space-y-6">
-                  {/* Thumbnail and Title Card */}
-                  <Card className="border border-violet-200/60 shadow-lg shadow-violet-100/20 bg-white/80 backdrop-blur-sm overflow-hidden">
-                    <div className="relative w-full aspect-video bg-slate-100">
-                      {formData.thumbnailUrl ? (
-                        <Image
-                          src={formData.thumbnailUrl}
-                          alt={formData.title || 'Video thumbnail'}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Youtube className="w-16 h-16 text-slate-300" />
-                        </div>
-                      )}
-                    </div>
-                    <CardContent className="p-6">
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="yt-title" className="text-sm text-slate-900">Title</Label>
-                          <Input
-                            id="yt-title"
-                            value={formData.title}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-                            className="bg-white/80 border-violet-200/60"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="yt-description" className="text-sm text-slate-900">Summary</Label>
-                          <Textarea
-                            id="yt-description"
-                            value={formData.description}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                            rows={4}
-                            className="bg-white/80 border-violet-200/60"
-                          />
-                        </div>
-
-                        {/* Tags */}
-                        {formData.tags.length > 0 && (
-                          <div className="space-y-2">
-                            <Label className="text-sm text-slate-900">Tags</Label>
-                            <div className="flex flex-wrap gap-2">
-                              {formData.tags.map((tag, index) => (
-                                <Badge
-                                  key={index}
-                                  variant="secondary"
-                                  className="bg-violet-100 text-violet-700 border-violet-200 cursor-pointer hover:bg-red-100 hover:text-red-700 transition-colors"
-                                  onClick={() => removeTag(tag)}
-                                >
-                                  {tag}
-                                  <X className="w-3 h-3 ml-1" />
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="space-y-2">
-                          <Label htmlFor="yt-notes" className="text-sm text-slate-900">Personal Notes (Optional)</Label>
-                          <Textarea
-                            id="yt-notes"
-                            placeholder="Add your personal notes about this video..."
-                            value={formData.notes}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                            rows={3}
-                            className="bg-white/80 border-violet-200/60"
-                          />
-                        </div>
+              {youtubeResult &&
+                youtubeResult.status !== "completed" &&
+                !isLoadingYoutubeResult && (
+                  <Card className="border border-amber-200/60 shadow-lg bg-white/80">
+                    <CardContent className="py-8">
+                      <div className="text-center">
+                        <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto mb-4" />
+                        <h3 className="font-semibold text-slate-900 mb-2">
+                          Still Processing
+                        </h3>
+                        <p className="text-sm text-slate-600 mb-4">
+                          Your video is still being analyzed. Please check back
+                          in a moment.
+                        </p>
+                        <Button
+                          onClick={() => window.location.reload()}
+                          variant="outline"
+                          className="border-violet-200 text-violet-700"
+                        >
+                          Refresh
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
+                )}
 
-                  {/* Save Button */}
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => router.push('/dashboard/youtube-drafts')}
-                      className="border-violet-200 text-violet-700"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isSubmitting || !formData.title}
-                      className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4 mr-2" />
-                          Save to Memory Space
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              )}
+              {/* Completed Result View */}
+              {youtubeResult &&
+                youtubeResult.status === "completed" &&
+                youtubeResult.data &&
+                !isLoadingYoutubeResult && (
+                  <form
+                    onSubmit={handleSubmit}
+                    className="space-y-4 sm:space-y-5 md:space-y-6"
+                  >
+                    {/* Thumbnail and Title Card */}
+                    <Card className="border border-violet-200/60 shadow-lg shadow-violet-100/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+                      <div className="relative w-full aspect-video bg-slate-100">
+                        {formData.thumbnailUrl ? (
+                          <Image
+                            src={formData.thumbnailUrl}
+                            alt={formData.title || "Video thumbnail"}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Youtube className="w-16 h-16 text-slate-300" />
+                          </div>
+                        )}
+                      </div>
+                      <CardContent className="p-6">
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label
+                              htmlFor="yt-title"
+                              className="text-sm text-slate-900"
+                            >
+                              Title
+                            </Label>
+                            <Input
+                              id="yt-title"
+                              value={formData.title}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  title: e.target.value,
+                                }))
+                              }
+                              className="bg-white/80 border-violet-200/60"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label
+                              htmlFor="yt-description"
+                              className="text-sm text-slate-900"
+                            >
+                              Summary
+                            </Label>
+                            <Textarea
+                              id="yt-description"
+                              value={formData.description}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  description: e.target.value,
+                                }))
+                              }
+                              rows={4}
+                              className="bg-white/80 border-violet-200/60"
+                            />
+                          </div>
+
+                          {/* Tags */}
+                          {formData.tags.length > 0 && (
+                            <div className="space-y-2">
+                              <Label className="text-sm text-slate-900">
+                                Tags
+                              </Label>
+                              <div className="flex flex-wrap gap-2">
+                                {formData.tags.map((tag, index) => (
+                                  <Badge
+                                    key={index}
+                                    variant="secondary"
+                                    className="bg-violet-100 text-violet-700 border-violet-200 cursor-pointer hover:bg-red-100 hover:text-red-700 transition-colors"
+                                    onClick={() => removeTag(tag)}
+                                  >
+                                    {tag}
+                                    <X className="w-3 h-3 ml-1" />
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="space-y-2">
+                            <Label
+                              htmlFor="yt-notes"
+                              className="text-sm text-slate-900"
+                            >
+                              Personal Notes (Optional)
+                            </Label>
+                            <Textarea
+                              id="yt-notes"
+                              placeholder="Add your personal notes about this video..."
+                              value={formData.notes}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  notes: e.target.value,
+                                }))
+                              }
+                              rows={3}
+                              className="bg-white/80 border-violet-200/60"
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Save Button */}
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push("/dashboard/youtube-drafts")}
+                        className="border-violet-200 text-violet-700"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={isSubmitting || !formData.title}
+                        className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4 mr-2" />
+                            Save to Memory Space
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                )}
             </>
           ) : (
             /* Regular Quick Capture View */
             <>
               <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">Quick Capture</h1>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
+                  Quick Capture
+                </h1>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-300 mt-1">
                   Save and organize your digital content with smart tagging.
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 md:space-y-6">
+              <form
+                onSubmit={handleSubmit}
+                className="space-y-4 sm:space-y-5 md:space-y-6"
+              >
                 {/* Main Content Details Card */}
                 <Card className="border border-violet-200/60 shadow-lg shadow-violet-100/20 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-violet-100/30 transition-all duration-300 rounded-xl overflow-hidden">
                   <div className="bg-gradient-to-r from-violet-50/50 to-indigo-50/50 border-b border-violet-100/50">
@@ -1031,7 +1121,11 @@ export default function AddContentPage() {
                     </CardHeader>
                   </div>
                   <CardContent className="p-6">
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <Tabs
+                      value={activeTab}
+                      onValueChange={setActiveTab}
+                      className="w-full"
+                    >
                       <TabsList className="grid w-full grid-cols-2 mb-6 bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200/50 rounded-lg p-1.5 shadow-inner h-11">
                         <TabsTrigger
                           value="url"
@@ -1051,7 +1145,10 @@ export default function AddContentPage() {
 
                       <TabsContent value="url" className="space-y-4">
                         <div className="space-y-3">
-                          <Label htmlFor="url" className="text-sm text-slate-900 flex items-center gap-2">
+                          <Label
+                            htmlFor="url"
+                            className="text-sm text-slate-900 flex items-center gap-2"
+                          >
                             <LinkIcon className="w-4 h-4 text-violet-500" />
                             URL
                           </Label>
@@ -1060,7 +1157,12 @@ export default function AddContentPage() {
                               id="url"
                               placeholder="https://dev.to/article, https://wikipedia.org/wiki/topic, or public PDF"
                               value={formData.url}
-                              onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  url: e.target.value,
+                                }))
+                              }
                               className="flex-1 text-sm bg-white/80 border-violet-200/60 focus:border-violet-400 focus:ring-violet-400/20 focus:ring-2 rounded-lg shadow-sm transition-all duration-200 h-10"
                             />
                             <Button
@@ -1088,26 +1190,38 @@ export default function AddContentPage() {
                             <div className="mt-2 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                               <div className="text-xs text-red-600 dark:text-red-400">
                                 <strong>Extraction failed:</strong>
-                                <pre className="mt-1.5 whitespace-pre-wrap font-sans text-xs">{extractionError}</pre>
+                                <pre className="mt-1.5 whitespace-pre-wrap font-sans text-xs">
+                                  {extractionError}
+                                </pre>
                               </div>
 
                               {/* PDF-specific help */}
-                              {extractionError.includes('PDF') && (
+                              {extractionError.includes("PDF") && (
                                 <div className="mt-1.5 text-xs text-red-500 dark:text-red-400">
-                                  <p><strong>PDF troubleshooting:</strong></p>
+                                  <p>
+                                    <strong>PDF troubleshooting:</strong>
+                                  </p>
                                   <ul className="list-disc list-inside mt-1 space-y-0.5">
-                                    <li>Ensure the PDF is publicly accessible</li>
-                                    <li>Try downloading the PDF manually first</li>
+                                    <li>
+                                      Ensure the PDF is publicly accessible
+                                    </li>
+                                    <li>
+                                      Try downloading the PDF manually first
+                                    </li>
                                     <li>Some PDFs may be password-protected</li>
-                                    <li>Academic papers might be behind paywalls</li>
+                                    <li>
+                                      Academic papers might be behind paywalls
+                                    </li>
                                   </ul>
                                 </div>
                               )}
 
                               {/* General help for other errors */}
-                              {!extractionError.includes('PDF') && (
+                              {!extractionError.includes("PDF") && (
                                 <div className="mt-1.5 text-xs text-red-500 dark:text-red-400">
-                                  <p><strong>Try these URLs for testing:</strong></p>
+                                  <p>
+                                    <strong>Try these URLs for testing:</strong>
+                                  </p>
                                   <ul className="list-disc list-inside mt-1 space-y-0.5">
                                     <li>https://dev.to/any-article</li>
                                     <li>https://medium.com/any-article</li>
@@ -1120,17 +1234,23 @@ export default function AddContentPage() {
                           )}
 
                           {/* Success Display */}
-                          {!isAnalyzing && !extractionError && formData.title && formData.url && (
-                            <div className="mt-2 p-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
-                              <p className="text-xs text-green-600 dark:text-green-400 flex items-center">
-                                <Check className="h-3.5 w-3.5 mr-1.5" />
-                                Content extracted successfully! Review the details below.
-                              </p>
-                            </div>
-                          )}
+                          {!isAnalyzing &&
+                            !extractionError &&
+                            formData.title &&
+                            formData.url && (
+                              <div className="mt-2 p-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                                <p className="text-xs text-green-600 dark:text-green-400 flex items-center">
+                                  <Check className="h-3.5 w-3.5 mr-1.5" />
+                                  Content extracted successfully! Review the
+                                  details below.
+                                </p>
+                              </div>
+                            )}
 
                           {/* Thumbnail Preview & Upload Section */}
-                          {(isGeneratingThumbnail || formData.thumbnailUrl || thumbnailAttempted) && (
+                          {(isGeneratingThumbnail ||
+                            formData.thumbnailUrl ||
+                            thumbnailAttempted) && (
                             <div className="mt-4 p-4 border border-violet-100 rounded-xl bg-violet-50/30">
                               <Label className="text-sm text-slate-900 mb-3 flex items-center gap-2">
                                 <ImageIcon className="w-4 h-4 text-violet-500" />
@@ -1140,7 +1260,9 @@ export default function AddContentPage() {
                               {isGeneratingThumbnail ? (
                                 <div className="flex items-center gap-3 p-4 bg-white/50 rounded-lg border border-violet-100/50">
                                   <Loader2 className="w-5 h-5 text-violet-500 animate-spin" />
-                                  <span className="text-sm text-violet-600">Generating thumbnail...</span>
+                                  <span className="text-sm text-violet-600">
+                                    Generating thumbnail...
+                                  </span>
                                 </div>
                               ) : (
                                 <div className="flex items-start gap-4">
@@ -1159,7 +1281,12 @@ export default function AddContentPage() {
                                             type="button"
                                             variant="ghost"
                                             size="icon"
-                                            onClick={() => setFormData(prev => ({ ...prev, thumbnailUrl: '' }))}
+                                            onClick={() =>
+                                              setFormData((prev) => ({
+                                                ...prev,
+                                                thumbnailUrl: "",
+                                              }))
+                                            }
                                             className="text-white hover:text-red-400 hover:bg-transparent"
                                           >
                                             <X className="w-5 h-5" />
@@ -1180,7 +1307,11 @@ export default function AddContentPage() {
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => document.getElementById('thumbnail-upload')?.click()}
+                                        onClick={() =>
+                                          document
+                                            .getElementById("thumbnail-upload")
+                                            ?.click()
+                                        }
                                         disabled={isUploading}
                                         className="text-xs border-violet-200 text-violet-700 hover:bg-violet-50 transition-colors"
                                       >
@@ -1192,7 +1323,9 @@ export default function AddContentPage() {
                                         ) : (
                                           <>
                                             <Upload className="w-3 h-3 mr-2" />
-                                            {formData.thumbnailUrl ? 'Change Cover' : 'Upload Cover'}
+                                            {formData.thumbnailUrl
+                                              ? "Change Cover"
+                                              : "Upload Cover"}
                                           </>
                                         )}
                                       </Button>
@@ -1206,10 +1339,14 @@ export default function AddContentPage() {
                                           if (!file) return;
 
                                           // Store blob for upload on save, show local preview
-                                          const localPreviewUrl = URL.createObjectURL(file);
+                                          const localPreviewUrl =
+                                            URL.createObjectURL(file);
                                           setPendingThumbnailBlob(file);
                                           setPendingThumbnailUrl("");
-                                          setFormData(prev => ({ ...prev, thumbnailUrl: localPreviewUrl }));
+                                          setFormData((prev) => ({
+                                            ...prev,
+                                            thumbnailUrl: localPreviewUrl,
+                                          }));
                                         }}
                                       />
                                     </div>
@@ -1235,13 +1372,19 @@ export default function AddContentPage() {
                           {isUploading ? (
                             <div className="space-y-3">
                               <Loader2 className="w-8 h-8 animate-spin text-violet-500 mx-auto" />
-                              <p className="text-violet-700 text-sm">{uploadProgress}</p>
+                              <p className="text-violet-700 text-sm">
+                                {uploadProgress}
+                              </p>
                             </div>
                           ) : selectedFile && formData.url ? (
                             <div className="space-y-3">
                               <Check className="w-8 h-8 text-green-500 mx-auto" />
-                              <p className="text-green-700 text-sm font-medium">{selectedFile.name}</p>
-                              <p className="text-xs text-slate-600">File uploaded successfully!</p>
+                              <p className="text-green-700 text-sm font-medium">
+                                {selectedFile.name}
+                              </p>
+                              <p className="text-xs text-slate-600">
+                                File uploaded successfully!
+                              </p>
                               <div className="flex gap-3 justify-center mt-4">
                                 <Button
                                   type="button"
@@ -1266,8 +1409,11 @@ export default function AddContentPage() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => {
-                                    setSelectedFile(null)
-                                    setFormData((prev) => ({ ...prev, url: '' }))
+                                    setSelectedFile(null);
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      url: "",
+                                    }));
                                   }}
                                   className="text-xs border-violet-300/60 text-violet-700 hover:bg-violet-50 rounded-md"
                                 >
@@ -1277,7 +1423,9 @@ export default function AddContentPage() {
                             </div>
                           ) : (
                             <>
-                              <p className="text-violet-700 mb-4 text-sm">Drop files here or click to browse</p>
+                              <p className="text-violet-700 mb-4 text-sm">
+                                Drop files here or click to browse
+                              </p>
                               <input
                                 type="file"
                                 id="file-upload"
@@ -1288,12 +1436,18 @@ export default function AddContentPage() {
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => document.getElementById('file-upload')?.click()}
+                                onClick={() =>
+                                  document
+                                    .getElementById("file-upload")
+                                    ?.click()
+                                }
                                 className="text-sm border-violet-300/60 text-violet-700 hover:bg-violet-50 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 px-6 py-2"
                               >
                                 Choose Files
                               </Button>
-                              <p className="text-xs text-slate-500 mt-3">Maximum file size: 10MB</p>
+                              <p className="text-xs text-slate-500 mt-3">
+                                Maximum file size: 10MB
+                              </p>
                             </>
                           )}
                         </div>
@@ -1303,20 +1457,28 @@ export default function AddContentPage() {
                           <div className="mt-2 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                             <div className="text-xs text-red-600 dark:text-red-400">
                               <strong>Extraction failed:</strong>
-                              <pre className="mt-1.5 whitespace-pre-wrap font-sans text-xs">{extractionError}</pre>
+                              <pre className="mt-1.5 whitespace-pre-wrap font-sans text-xs">
+                                {extractionError}
+                              </pre>
                             </div>
                           </div>
                         )}
 
                         {/* Success Display for Upload Tab */}
-                        {activeTab === "upload" && !isAnalyzing && !extractionError && formData.title && formData.url && selectedFile && (
-                          <div className="mt-2 p-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
-                            <p className="text-xs text-green-600 dark:text-green-400 flex items-center">
-                              <Check className="h-3.5 w-3.5 mr-1.5" />
-                              Content extracted successfully! Review the details below.
-                            </p>
-                          </div>
-                        )}
+                        {activeTab === "upload" &&
+                          !isAnalyzing &&
+                          !extractionError &&
+                          formData.title &&
+                          formData.url &&
+                          selectedFile && (
+                            <div className="mt-2 p-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                              <p className="text-xs text-green-600 dark:text-green-400 flex items-center">
+                                <Check className="h-3.5 w-3.5 mr-1.5" />
+                                Content extracted successfully! Review the
+                                details below.
+                              </p>
+                            </div>
+                          )}
 
                         {/* Thumbnail Preview & Upload Section for File Upload */}
                         {(formData.thumbnailUrl || thumbnailAttempted) && (
@@ -1342,7 +1504,12 @@ export default function AddContentPage() {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => setFormData(prev => ({ ...prev, thumbnailUrl: '' }))}
+                                        onClick={() =>
+                                          setFormData((prev) => ({
+                                            ...prev,
+                                            thumbnailUrl: "",
+                                          }))
+                                        }
                                         className="text-white hover:text-red-400 hover:bg-transparent"
                                       >
                                         <X className="w-5 h-5" />
@@ -1363,7 +1530,11 @@ export default function AddContentPage() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => document.getElementById('file-thumbnail-upload')?.click()}
+                                    onClick={() =>
+                                      document
+                                        .getElementById("file-thumbnail-upload")
+                                        ?.click()
+                                    }
                                     disabled={isUploading}
                                     className="text-xs border-violet-200 text-violet-700 hover:bg-violet-50 transition-colors"
                                   >
@@ -1375,7 +1546,9 @@ export default function AddContentPage() {
                                     ) : (
                                       <>
                                         <Upload className="w-3 h-3 mr-2" />
-                                        {formData.thumbnailUrl ? 'Change Cover' : 'Upload Cover'}
+                                        {formData.thumbnailUrl
+                                          ? "Change Cover"
+                                          : "Upload Cover"}
                                       </>
                                     )}
                                   </Button>
@@ -1389,15 +1562,19 @@ export default function AddContentPage() {
                                       if (!file) return;
 
                                       // Store blob for upload on save, show local preview
-                                      const localPreviewUrl = URL.createObjectURL(file);
+                                      const localPreviewUrl =
+                                        URL.createObjectURL(file);
                                       setPendingThumbnailBlob(file);
                                       setPendingThumbnailUrl("");
-                                      setFormData(prev => ({ ...prev, thumbnailUrl: localPreviewUrl }));
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        thumbnailUrl: localPreviewUrl,
+                                      }));
                                     }}
                                   />
                                 </div>
                                 <p className="text-[10px] text-slate-500 leading-tight">
-                                  {selectedFile?.type.startsWith('image/')
+                                  {selectedFile?.type.startsWith("image/")
                                     ? "Auto-set from uploaded image. You can change it if needed."
                                     : "Upload a cover image for your file."}
                                 </p>
@@ -1415,7 +1592,10 @@ export default function AddContentPage() {
                   <Card className="border border-violet-200/60 shadow-md shadow-violet-100/20 bg-white/80 backdrop-blur-sm hover:shadow-lg hover:shadow-violet-100/30 transition-all duration-300 rounded-lg">
                     <CardContent className="p-4 sm:p-5 md:p-6">
                       <div className="space-y-2 sm:space-y-3">
-                        <Label htmlFor="title" className="text-xs sm:text-sm text-slate-900 flex items-center gap-2">
+                        <Label
+                          htmlFor="title"
+                          className="text-xs sm:text-sm text-slate-900 flex items-center gap-2"
+                        >
                           <div className="w-1.5 h-4 bg-gradient-to-b from-violet-500 to-purple-600 rounded-full flex-shrink-0"></div>
                           Title
                         </Label>
@@ -1423,7 +1603,12 @@ export default function AddContentPage() {
                           id="title"
                           placeholder="Content title"
                           value={formData.title}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              title: e.target.value,
+                            }))
+                          }
                           required
                           className="text-xs sm:text-sm bg-white/80 border-violet-200/60 focus:border-violet-400 focus:ring-violet-400/20 focus:ring-2 rounded-lg shadow-sm transition-all duration-200 h-9 sm:h-10"
                         />
@@ -1434,24 +1619,59 @@ export default function AddContentPage() {
                   <Card className="border border-violet-200/60 shadow-md shadow-violet-100/20 bg-white/80 backdrop-blur-sm hover:shadow-lg hover:shadow-violet-100/30 transition-all duration-300 rounded-lg">
                     <CardContent className="p-4 sm:p-5 md:p-6">
                       <div className="space-y-2 sm:space-y-3">
-                        <Label htmlFor="type" className="text-xs sm:text-sm text-slate-900 flex items-center gap-2">
+                        <Label
+                          htmlFor="type"
+                          className="text-xs sm:text-sm text-slate-900 flex items-center gap-2"
+                        >
                           <div className="w-1.5 h-4 bg-gradient-to-b from-violet-500 to-purple-600 rounded-full flex-shrink-0"></div>
                           Content Type
                         </Label>
                         <Select
                           value={formData.type}
-                          onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value }))}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({ ...prev, type: value }))
+                          }
                         >
                           <SelectTrigger className="text-xs sm:text-sm bg-white/80 border-violet-200/60 focus:border-violet-400 focus:ring-violet-400/20 focus:ring-2 rounded-lg shadow-sm h-9 sm:h-10">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                           <SelectContent className="border-violet-200/60 rounded-lg shadow-lg">
-                            <SelectItem value="article" className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2">Article</SelectItem>
-                            <SelectItem value="video" className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2">Video</SelectItem>
-                            <SelectItem value="pdf" className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2">PDF</SelectItem>
-                            <SelectItem value="image" className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2">Image</SelectItem>
-                            <SelectItem value="tweet" className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2">Tweet</SelectItem>
-                            <SelectItem value="other" className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2">Other</SelectItem>
+                            <SelectItem
+                              value="article"
+                              className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2"
+                            >
+                              Article
+                            </SelectItem>
+                            <SelectItem
+                              value="video"
+                              className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2"
+                            >
+                              Video
+                            </SelectItem>
+                            <SelectItem
+                              value="pdf"
+                              className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2"
+                            >
+                              PDF
+                            </SelectItem>
+                            <SelectItem
+                              value="image"
+                              className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2"
+                            >
+                              Image
+                            </SelectItem>
+                            <SelectItem
+                              value="tweet"
+                              className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2"
+                            >
+                              Tweet
+                            </SelectItem>
+                            <SelectItem
+                              value="other"
+                              className="text-xs sm:text-sm hover:bg-violet-50 focus:bg-violet-50 rounded-md py-2"
+                            >
+                              Other
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1464,7 +1684,10 @@ export default function AddContentPage() {
                   <CardContent className="p-6">
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="description" className="text-sm text-slate-900 flex items-center gap-2">
+                        <Label
+                          htmlFor="description"
+                          className="text-sm text-slate-900 flex items-center gap-2"
+                        >
                           <div className="w-1.5 h-4 bg-gradient-to-b from-violet-500 to-purple-600 rounded-full"></div>
                           Description
                         </Label>
@@ -1473,10 +1696,12 @@ export default function AddContentPage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => setShowDescriptionPreview(!showDescriptionPreview)}
+                            onClick={() =>
+                              setShowDescriptionPreview(!showDescriptionPreview)
+                            }
                             className="text-xs border-violet-300/60 text-violet-700 hover:bg-violet-50 rounded-md shadow-sm transition-all duration-200 h-7 px-3"
                           >
-                            {showDescriptionPreview ? 'Edit' : 'Preview'}
+                            {showDescriptionPreview ? "Edit" : "Preview"}
                           </Button>
                         )}
                       </div>
@@ -1486,7 +1711,9 @@ export default function AddContentPage() {
                           <div
                             className="prose prose-sm max-w-none dark:prose-invert text-xs leading-relaxed"
                             dangerouslySetInnerHTML={{
-                              __html: convertMarkdownToHtml(formData.description),
+                              __html: convertMarkdownToHtml(
+                                formData.description
+                              ),
                             }}
                           />
                         </div>
@@ -1496,11 +1723,11 @@ export default function AddContentPage() {
                           placeholder="Brief description of the content"
                           value={formData.description}
                           onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          description: e.target.value,
-                        }))
-                      }
+                            setFormData((prev) => ({
+                              ...prev,
+                              description: e.target.value,
+                            }))
+                          }
                           rows={4}
                           className="text-sm bg-white/80 border-violet-200/60 focus:border-violet-400 focus:ring-violet-400/20 focus:ring-2 rounded-lg shadow-sm transition-all duration-200 resize-none"
                         />
@@ -1533,10 +1760,10 @@ export default function AddContentPage() {
                       <div className="flex gap-3">
                         <Input
                           placeholder={
-                        formData.tags.length >= 10
-                          ? "Maximum 10 tags reached"
-                          : "Add a tag"
-                      }
+                            formData.tags.length >= 10
+                              ? "Maximum 10 tags reached"
+                              : "Add a tag"
+                          }
                           value={newTag}
                           onChange={(e) => setNewTag(e.target.value)}
                           onKeyPress={(e) => {
@@ -1561,7 +1788,9 @@ export default function AddContentPage() {
 
                     {formData.tags.length > 0 && (
                       <div className="space-y-3">
-                        <Label className="text-sm text-slate-700">Your Tags:</Label>
+                        <Label className="text-sm text-slate-700">
+                          Your Tags:
+                        </Label>
                         <div className="flex flex-wrap gap-2">
                           {formData.tags.map((tag) => (
                             <Badge
@@ -1584,7 +1813,9 @@ export default function AddContentPage() {
                     )}
 
                     <div className="space-y-3">
-                      <Label className="text-sm text-slate-700">Suggested Tags:</Label>
+                      <Label className="text-sm text-slate-700">
+                        Suggested Tags:
+                      </Label>
                       <div className="flex flex-wrap gap-2">
                         {suggestedTags
                           .filter((tag) => !formData.tags.includes(tag))
@@ -1610,7 +1841,10 @@ export default function AddContentPage() {
                 <Card className="border border-violet-200/60 shadow-md shadow-violet-100/20 bg-white/80 backdrop-blur-sm hover:shadow-lg hover:shadow-violet-100/30 transition-all duration-300 rounded-lg">
                   <CardContent className="p-6">
                     <div className="space-y-3">
-                      <Label htmlFor="notes" className="text-sm text-slate-900 flex items-center gap-2">
+                      <Label
+                        htmlFor="notes"
+                        className="text-sm text-slate-900 flex items-center gap-2"
+                      >
                         <div className="w-1.5 h-4 bg-gradient-to-b from-violet-500 to-purple-600 rounded-full"></div>
                         Personal Notes
                       </Label>
@@ -1618,7 +1852,12 @@ export default function AddContentPage() {
                         id="notes"
                         placeholder="Add your thoughts, key takeaways, or why you saved this..."
                         value={formData.notes}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            notes: e.target.value,
+                          }))
+                        }
                         rows={4}
                         className="text-sm bg-white/80 border-violet-200/60 focus:border-violet-400 focus:ring-violet-400/20 focus:ring-2 rounded-lg shadow-sm transition-all duration-200 resize-none"
                       />
@@ -1630,7 +1869,11 @@ export default function AddContentPage() {
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-4">
                   <Button
                     type="submit"
-                    disabled={isSubmitting || !formData.title.trim() || !formData.url.trim()}
+                    disabled={
+                      isSubmitting ||
+                      !formData.title.trim() ||
+                      !formData.url.trim()
+                    }
                     className="text-xs sm:text-sm bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 rounded-lg px-4 sm:px-6 md:px-8 py-2 sm:py-2.5 w-full sm:w-auto"
                   >
                     {isSubmitting ? (
@@ -1655,9 +1898,15 @@ export default function AddContentPage() {
                 {/* Validation hints */}
                 {(!formData.title.trim() || !formData.url.trim()) && (
                   <div className="text-xs text-slate-600 bg-violet-50/50 p-3 rounded-lg border border-violet-200/60">
-                    {!formData.title.trim() && !formData.url.trim() && "Please enter a title and URL to save content."}
-                    {!formData.title.trim() && formData.url.trim() && "Please enter a title to save content."}
-                    {formData.title.trim() && !formData.url.trim() && "Please enter a URL to save content."}
+                    {!formData.title.trim() &&
+                      !formData.url.trim() &&
+                      "Please enter a title and URL to save content."}
+                    {!formData.title.trim() &&
+                      formData.url.trim() &&
+                      "Please enter a title to save content."}
+                    {formData.title.trim() &&
+                      !formData.url.trim() &&
+                      "Please enter a URL to save content."}
                   </div>
                 )}
               </form>
