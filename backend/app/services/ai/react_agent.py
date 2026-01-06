@@ -10,6 +10,7 @@ Production-grade agent implementation using:
 import json
 import logging
 import re
+from app.services.ai.system_contexts.tagzzs import TAGZZS_SYSTEM_CONTEXT
 from typing import Optional, List, Dict, Any, Literal
 
 from pydantic import BaseModel, Field
@@ -104,7 +105,26 @@ class ReActAgent:
             )
 
         logger.info(f"[REACT_AGENT] Starting run for: {user_query[:100]}...")
+        
+        if "tagzzs" in user_query.lower():
+            messages =[
+                {
+                    "role" = "system",
+                    "content" = TAGZZS_SYSTEM_CONTEXT.strip(),
+                },               
+                {    
+                    "role":"user",
+                    "content": user_query
+                },
+            ]
 
+            reponse = await self._call_llm(messages)
+            return AgentResponse(
+                response_text=reponse or "Tagzzs is an AI-powered personal knowledge system.",
+                status="completed",
+            )
+
+            
         messages = self._build_messages(user_query, conversation_history or [])
         self.execution_trace = []
         sources: List[Dict[str, str]] = []
@@ -218,10 +238,14 @@ class ReActAgent:
         messages = [
             {
                 "role": "system",
+                "content": TAGZZS_SYSTEM_CONTEXT.strip(),
+            },
+            {
+                "role": "system",
                 "content": SYSTEM_PROMPT.format(
                     tool_descriptions=Tools.get_tool_descriptions()
                 ),
-            }
+            },
         ]
 
         for msg in conversation_history[-10:]:
