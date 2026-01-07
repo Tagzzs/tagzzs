@@ -29,6 +29,7 @@ from app.api import (
     ai_chats_router,
     youtube_router,
     extension_router,
+    audio_router,
 )
 
 
@@ -67,6 +68,7 @@ app.include_router(upload_router)
 app.include_router(ai_chats_router)
 app.include_router(youtube_router)
 app.include_router(extension_router)
+app.include_router(audio_router)
 
 
 @app.get("/")

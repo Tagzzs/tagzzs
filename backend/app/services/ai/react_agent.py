@@ -109,8 +109,8 @@ class ReActAgent:
         if "tagzzs" in user_query.lower():
             messages =[
                 {
-                    "role" = "system",
-                    "content" = TAGZZS_SYSTEM_CONTEXT.strip(),
+                    "role": "system",
+                    "content": TAGZZS_SYSTEM_CONTEXT.strip(),
                 },               
                 {    
                     "role":"user",

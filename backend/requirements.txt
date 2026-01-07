@@ -25,6 +25,5 @@ youtube-transcript-api
 ffmpeg-python
 supabase
 firebase_admin
-google-genai
-duckduckgo-search
 firebase-admin
+duckduckgo-search

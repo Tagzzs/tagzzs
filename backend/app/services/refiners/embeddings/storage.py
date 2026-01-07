@@ -8,7 +8,7 @@ Supports both single embeddings and chunk-based storage for Phase 2 pipeline.
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 try:
     from chromadb.api.models.Collection import Collection
@@ -93,7 +93,7 @@ class ChromaCloudStorage:
 
     async def store_embeddings_batch(
         self, docs: List[Dict[str, Any]]
-    ) -> tuple[int, int]:
+    ) -> Tuple[int, int]:
         """
         Store multiple embeddings in batch.
 
@@ -188,7 +188,7 @@ class ChromaCloudStorage:
         tags: Optional[List[str]] = None,
         source_url: str = "",
         source_type: str = "web",
-    ) -> tuple[List[str], int]:
+    ) -> Tuple[List[str], int]:
         """
         Store document chunks with embeddings in Chroma Cloud.
 
