@@ -42,8 +42,8 @@ export function DashboardNavbar() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
             },
+            credentials: 'include',
             body: JSON.stringify({})
           })
 

@@ -115,7 +115,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = session!.access_token;
 
       if (!token) {
         throw new Error("Authentication required. Please log in again.");
