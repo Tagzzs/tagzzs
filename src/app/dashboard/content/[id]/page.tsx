@@ -112,14 +112,16 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
       // Get auth token
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session!.access_token;
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
 
-      if (!token) {
-        throw new Error("Authentication required. Please log in again.");
+      // Safe Check: Handle SSR or missing session
+      if (authError || !session) {
+        console.error("Auth Error:", authError);
+        setError("Authentication error");
+        return;
       }
+
+      const token = session.access_token;
 
       // Fetch content data
       const contentResponse = await fetch(

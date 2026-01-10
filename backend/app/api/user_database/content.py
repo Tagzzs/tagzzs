@@ -3,6 +3,7 @@ import time
 import os
 import re
 import uuid
+import random
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Request, Depends, Query
@@ -22,6 +23,7 @@ from app.services.tag_count_service import (
     update_tag_counts_on_array_change,
 )
 from app.utils.supabase.auth import create_auth_error, create_auth_response
+from app.utils.supabase.supabase_client import supabase
 
 
 class AddContentSchema(BaseModel):
@@ -93,9 +95,7 @@ router = APIRouter(prefix="/api/user-database/content", tags=["Content Managemen
 
 @router.post("/add")
 async def add_content(req: Request):
-    start_time = (
-        time.time() * 1000
-    )  # TODO: Add latency later using this and pass it as in response
+    start_time = time.time() * 1000
     user_id = None
     content_id = None
 
@@ -103,116 +103,39 @@ async def add_content(req: Request):
         try:
             user = await get_current_user(req)
         except Exception:
-            return create_auth_error(
-                message="Authentication required to add content"
-            )  # Status code parameter was redundant
-
+            return create_auth_error(message="Authentication required to add content")
+        
         user_id = user["id"]
 
-        # BODY PARSING & TYPE CHECK
         try:
             body = await req.json()
         except Exception:
             return JSONResponse(
                 status_code=400,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "INVALID_JSON",
-                        "message": "Invalid JSON format in request body",
-                        "details": "Please ensure your request body contains valid JSON",
-                    },
-                },
+                content={"success": False, "error": {"code": "INVALID_JSON", "message": "Invalid JSON format"}}
             )
 
-        if not isinstance(body, dict):
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "INVALID_REQUEST_BODY",
-                        "message": "Request body must be a valid JSON object",
-                        "details": f"Expected object, received {type(body).__name__}",
-                    },
-                },
-            )
-
-        # Validation (Zod safeParse replication)
+        # VALIDATION
         data_with_user_id = {**body, "userId": user_id}
         try:
-            # Pydantic validation handles URL format and required fields
             validated_data = AddContentSchema(**data_with_user_id)
         except ValidationError as e:
             return JSONResponse(
                 status_code=400,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "VALIDATION_ERROR",
-                        "message": "Invalid content data provided",
-                        "details": e.errors(),
-                    },
-                },
+                content={"success": False, "error": {"code": "VALIDATION_ERROR", "message": str(e)}}
             )
 
-        # Database availability check
-        if not admin_db:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "SERVICE_UNAVAILABLE",
-                        "message": "Database service is temporarily unavailable",
-                        "details": "Please try again later",
-                    },
-                },
-            )
-
-        # User Verification - Create if doesn't exist
-        user_ref = admin_db.collection("users").document(user_id)
-        try:
-            user_doc = user_ref.get()
-            
-            # Auto-create user document if it doesn't exist
-            if not user_doc.exists:
-                user_ref.set({
-                    "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                    "email": user.get("email", ""),
-                    "totalContent": 0,
-                    "totalTags": 0,
-                })
-        except Exception:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "DATABASE_ERROR",
-                        "message": "Unable to verify user account",
-                        "details": "Database connection issue, please try again",
-                    },
-                },
-            )
-
-        # ID & METADATA PREP
-        content_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        # PREP METADATA & IDS
+        content_id = body.get("contentId") or str(uuid.uuid4())
         embedding_metadata = {}
 
-        # Embedding
-        # Prepare content for embedding
+        # AI EMBEDDING (Logic remains the same, not pushed to Supabase yet)
+        # TODO: INTEGRATE THIS AFTER THE SUPABASE MIGRATION
         raw_c = validated_data.rawContent or ""
         desc = validated_data.description or ""
-        has_content = len(raw_c.strip()) > 0
-        has_description = len(desc.strip()) > 0
-
-        if has_content or has_description:
+        if len(raw_c.strip()) > 0 or len(desc.strip()) > 0:
             try:
-                # Direct call to embedding service instead of internal API call
                 from app.api.embed import embed_and_store_chunks
-
                 embedding_payload = {
                     "user_id": user_id,
                     "content_id": content_id,
@@ -222,143 +145,72 @@ async def add_content(req: Request):
                     "source_url": str(validated_data.link),
                     "source_type": validated_data.contentType or "",
                 }
-
                 emb_data = await embed_and_store_chunks(embedding_payload)
-
                 if emb_data.get("success"):
                     embedding_metadata = {
                         "chromaDocIds": emb_data.get("chroma_doc_ids", []),
                         "summaryDocId": emb_data.get("summary_doc_id", ""),
-                        "chunkCount": emb_data.get("chunk_count", 0),
+                        "chunk_count": emb_data.get("chunk_count", 0),
                     }
             except Exception as e:
                 print(f"Embedding failed: {e}")
-                pass
 
-        processing_time = time.time() - start_time
-
-        # DATA MAPPING
-        content_data = {
-            "createdAt": now,
-            "tagsId": validated_data.tagsId or [],
-            "link": str(validated_data.link),
-            "title": validated_data.title.strip(),
-            "description": (validated_data.description or "").strip(),
-            "contentType": validated_data.contentType or "article",
-            "contentSource": validated_data.link.host or "",
-            "personalNotes": (validated_data.personalNotes or "").strip(),
-            "readTime": validated_data.readTime or "",
-            "updatedAt": now,
-            "thumbnailUrl": validated_data.thumbnailUrl or None,
-            "rawContent": validated_data.rawContent or "",
-            "embeddingMetadata": {
-                **(
-                    {"chromaDocIds": embedding_metadata["chromaDocIds"]}
-                    if embedding_metadata.get("chromaDocIds")
-                    else {}
-                ),
-                **(
-                    {"summaryDocId": embedding_metadata["summaryDocId"]}
-                    if embedding_metadata.get("summaryDocId")
-                    else {}
-                ),
-                **(
-                    {"chunkCount": embedding_metadata["chunkCount"]}
-                    if embedding_metadata.get("chunkCount", 0) > 0
-                    else {}
-                ),
-            },
-            "processingTime": processing_time,
-        }
-
-        # Storage and count update
-        content_ref = (
-            admin_db.collection("users")
-            .document(user_id)
-            .collection("content")
-            .document(content_id)
-        )
         try:
-            content_ref.set(content_data)
-            try:
-                await FirebaseUserService.update_content_count(user_id, 1)
-            except Exception:
-                pass
-        except Exception:
+            tag_color_map = {
+                tag: f"#{random.randint(0, 0xFFFFFF):06x}" 
+                for tag in validated_data.tagsId
+            }
+            print(tag_color_map)
+
+            result = supabase.rpc("sync_full_content", {
+                "p_contentid": content_id,
+                "p_userid": user_id,
+                "p_title": validated_data.title,
+                "p_description": validated_data.description,
+                "p_thumbnail_url": validated_data.thumbnailUrl,
+                "p_content_type": validated_data.contentType,
+                "p_content_source": str(validated_data.link.host),
+                "p_read_time": int(validated_data.readTime or 0),
+                "p_raw_content": validated_data.rawContent,
+                "p_note_data": {"text": validated_data.personalNotes},
+                "p_tag_map": tag_color_map
+            }).execute()
+
+            if hasattr(result, 'error') and result.error:
+                raise Exception(result.error.message)
+
+        except Exception as db_error:
+            print(f"Supabase Sync Error: {db_error}")
             return JSONResponse(
                 status_code=500,
                 content={
                     "success": False,
                     "error": {
                         "code": "STORAGE_FAILED",
-                        "message": "Failed to save content to database",
-                        "details": "Unable to store content, please try again",
-                    },
-                },
+                        "message": "Failed to sync content to Supabase",
+                        "details": str(db_error)
+                    }
+                }
             )
 
-        # Tag count updates
-        if content_data.get("tagsId"):
-            try:
-                await update_multiple_tag_counts(user_id, content_data["tagsId"])
-            except Exception:
-                pass
-
+        processing_time = time.time() - start_time
         return create_auth_response(
             data={
                 "contentId": content_id,
-                "content": content_data,
-                "message": "Content added successfully with thumbnail mapping",
-                "timestamp": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "processingTime": processing_time,
+                "message": "Content synced successfully to Supabase",
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
             user=user,
             status_code=201,
         )
 
     except Exception as error:
-        # Replicating the final catch block error codes
         import traceback
-
         traceback.print_exc()
-        err_str = str(error).lower()
-        if "permission-denied" in err_str:
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "PERMISSION_DENIED",
-                        "message": "Insufficient permissions to add content",
-                        "details": "Please check your account permissions",
-                    },
-                },
-            )
-
-        if "unavailable" in err_str:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": "SERVICE_UNAVAILABLE",
-                        "message": "Database service is temporarily unavailable",
-                        "details": "Please try again later",
-                    },
-                },
-            )
-
         return JSONResponse(
             status_code=500,
-            content={
-                "success": False,
-                "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "An unexpected error occurred while adding content",
-                    "details": "Please try again later",
-                },
-            },
+            content={"success": False, "error": {"code": "INTERNAL_ERROR", "message": str(error)}}
         )
 
 
@@ -690,38 +542,64 @@ async def get_user_content(request: Request, user: dict = Depends(get_current_us
             pass
         filters = ContentQueryFilters(**body_data)
 
-        query = admin_db.collection("users").document(user_id).collection("content")
+        query = supabase.table("content").select(
+            "*, notes:personal_notes(note_data), tags:content_tags(tag_details:tags(tagid, tag_name, color_code))"
+        ).eq("userid", user_id).eq("is_deleted", False)
+
+        content_id = body_data.get("contentId")
+        if content_id:
+            query = query.eq("contentid", content_id)
 
         if filters.tagId:
-            query = query.where(filter=FieldFilter("tagsId", "==", filters.tagId))
+            query = query.filter("content_tags.tagid", "eq", filters.tagId)
         if filters.contentType:
-            query = query.where(
-                filter=FieldFilter("contentType", "==", filters.contentType)
-            )
+            query = query.eq("content_type", filters.contentType)
 
-        # Apply Sorting
-        if filters.sortBy == "oldest":
-            query = query.order_by("createdAt", direction=FirestoreQuery.ASCENDING)
-        elif filters.sortBy == "title":
-            query = query.order_by("title", direction=FirestoreQuery.ASCENDING)
-        elif filters.sortBy == "updated":
-            query = query.order_by("updatedAt", direction=FirestoreQuery.DESCENDING)
-        else:
-            query = query.order_by("createdAt", direction=FirestoreQuery.DESCENDING)
+        sort_col = "created_at"
+        is_desc = True
+        if filters.sortBy == "oldest": is_desc = False
+        elif filters.sortBy == "title": sort_col, is_desc = "title", False
+        elif filters.sortBy == "updated": sort_col = "updated_at"
+
+        query = query.order(sort_col, desc=is_desc)
 
         # Pagination
         if filters.limit:
-            query = query.limit(filters.limit)
-        if filters.offset and filters.offset > 0:
-            query = query.offset(filters.offset)
+            start = filters.offset or 0
+            query = query.range(start, start + filters.limit - 1)
 
-        docs = query.stream()
+        response = query.execute()
+        raw_data = response.data
 
         content_list = []
-        for doc in docs:
-            data = doc.to_dict()
-            data["id"] = doc.id
-            content_list.append(data)
+        for item in raw_data:
+            # Extract only the IDs into tagsId
+            nested_tags = item.pop("tags", [])
+            tags_id_list = [t["tag_details"]["tagid"] for t in nested_tags if t.get("tag_details")]
+
+            # Flatten Personal Notes
+            notes_list = item.pop("notes", [])
+            personal_notes_text = ""
+            if notes_list and isinstance(notes_list[0].get("note_data"), dict):
+                personal_notes_text = notes_list[0]["note_data"].get("text", "")
+
+            # Create the camelCase object matching your Frontend 'ContentItem'
+            mapped_item = {
+                "id": item.get("contentid"),
+                "title": item.get("title", "Untitled"),
+                "description": item.get("description", ""),
+                "link": item.get("link", ""),
+                "contentType": item.get("content_type", "article"),
+                "contentSource": item.get("content_source", ""),
+                "thumbnailUrl": item.get("thumbnail_url"),
+                "readTime": item.get("read_time", 0),
+                "personalNotes": personal_notes_text,
+                "tagsId": tags_id_list,
+                "createdAt": item.get("created_at"),
+                "updatedAt": item.get("updated_at")
+            }
+            content_list.append(mapped_item)
+
 
         return {
             "success": True,

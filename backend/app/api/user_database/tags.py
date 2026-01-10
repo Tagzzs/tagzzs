@@ -9,6 +9,7 @@ from app.services.firebase.firebase_admin_setup import admin_db
 from app.services.firebase.firebase_user_service import FirebaseUserService
 from app.api.dependencies import get_current_user
 from app.utils.supabase.auth import create_auth_error
+from app.utils.supabase.supabase_client import supabase
 from app.utils.tag_slugs_generator import generate_tag_slug
 
 
@@ -76,9 +77,9 @@ async def add_tag(
         user_id = user.get("id")
 
         # Generate Tag ID
-        tag_id = generate_tag_slug(tag_payload.tagName)
+        tag_slug = generate_tag_slug(tag_payload.tagName)
 
-        if not tag_id:
+        if not tag_slug:
             return JSONResponse(
                 status_code=400,
                 content={
@@ -87,48 +88,35 @@ async def add_tag(
                 },
             )
 
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-        # Count content
-        content_collection = (
-            admin_db.collection("users").document(user_id).collection("content")
-        )
-        content_snapshot = content_collection.where(
-            "tagsId", "array_contains", tag_id
-        ).get()
-        current_content_count = len(content_snapshot)
-
-        # Prepare Tag Data
-        tag_data: TagsData = {
-            "createdAt": now,
-            "tagName": tag_payload.tagName,
-            "colorCode": tag_payload.colorCode,
-            "description": tag_payload.description or "",
-            "contentCount": current_content_count,
-            "updatedAt": now,
+        tag_data = {
+            "userid": user_id,
+            "tag_name": tag_payload.tagName,
+            "slug": tag_slug,
+            "color_code": tag_payload.colorCode,
+            "description": tag_payload.description or ""
         }
 
-        # Store in Firebase
-        tag_ref = (
-            admin_db.collection("users")
-            .document(user_id)
-            .collection("tags")
-            .document(tag_id)
-        )
-        tag_ref.set(tag_data)
+        tag_result = supabase.table("tags").insert(tag_data).execute()
+        
+        if not tag_result.data:
+            raise Exception("Failed to insert tag")
 
-        try:
-            FirebaseUserService.update_tags_count(user_id, 1)
-        except Exception:
-            pass
-
+        new_tag = tag_result.data[0]
+        tag_id = new_tag["tagid"]
+        
         return JSONResponse(
             status_code=201,
             content={
                 "success": True,
-                "tagId": tag_id,
-                "message": "Tag added successfully",
-                "data": tag_data,
+                "data": {
+                    "id": tag_id,
+                    "tagName": new_tag["tag_name"],
+                    "tagColor": new_tag["color_code"],
+                    "description": new_tag["description"],
+                    "contentCount": 0,
+                    "createdAt": new_tag["created_at"],
+                    "updatedAt": new_tag["updated_at"],
+                },
             },
         )
 
@@ -331,81 +319,57 @@ async def get_user_tags(
         user_id = user.get("id")
         tag_name = payload.tagName
 
-        # Reference to user's tags collection
-        tags_ref = admin_db.collection("users").document(user_id).collection("tags")
+        query = supabase.table("tags").select("*, tag_stats(usage_count)").eq("userid", user_id)
 
-        # Search for a specific tag
         if tag_name and isinstance(tag_name, str):
-            # Convert tagName to slug format for ID lookup
-            tag_id = generate_tag_slug(tag_name)
+            tag_slug = generate_tag_slug(tag_name)
+            result = query.eq("slug", tag_slug).execute()
 
-            if not tag_id:
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "success": True,
-                        "found": False,
-                        "tagId": None,
-                        "message": "Invalid tag name",
-                    },
-                )
+            if not tag_slug:
+                return JSONResponse(status_code=200, content={"success": True, "found": False, "message": "Invalid tag name"})
+                        
+            if not result.data:
+                return JSONResponse(status_code=200, content={"success": True, "found": False, "message": "Tag not found"})
+            
+            tag = result.data[0]
+            stats = tag.get("tag_stats", {})
+            usage = stats[0].get("usage_count", 0) if isinstance(stats, list) and stats else stats.get("usage_count", 0)
 
-            # Direct lookup using the slugified tag name as ID
-            tag_doc_snapshot = tags_ref.document(tag_id).get()
-
-            if not tag_doc_snapshot.exists:
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "success": True,
-                        "found": False,
-                        "tagId": None,
-                        "message": "Tag not found",
-                    },
-                )
-
-            tag_data = tag_doc_snapshot.to_dict()
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "success": True,
-                    "found": True,
-                    "tagId": tag_doc_snapshot.id,
-                    "data": {
-                        "id": tag_doc_snapshot.id,
-                        "tagName": tag_data.get("tagName"),
-                        "tagColor": tag_data.get("colorCode"),
-                        "description": tag_data.get("description"),
-                        "contentCount": tag_data.get("contentCount"),
-                        "createdAt": tag_data.get("createdAt"),
-                        "updatedAt": tag_data.get("updatedAt"),
-                    },
-                },
-            )
-
-        # Return all user's tags (If no tagName provided)
-        all_tags_snapshot = tags_ref.order_by("createdAt", direction="DESCENDING").get()
-
-        all_tags = []
-        for doc in all_tags_snapshot:
-            data = doc.to_dict()
-            all_tags.append(
-                {
-                    "id": doc.id,
-                    "tagName": data.get("tagName"),
-                    "tagColor": data.get("colorCode"),
-                    "description": data.get("description"),
-                    "contentCount": data.get("contentCount"),
-                    "createdAt": data.get("createdAt"),
-                    "updatedAt": data.get("updatedAt"),
+            return JSONResponse(content={
+                "success": True,
+                "found": True,
+                "data": {
+                    "id": tag["tagid"],
+                    "tagName": tag["tag_name"],
+                    "tagColor": tag["color_code"],
+                    "description": tag["description"],
+                    "contentCount": usage,
+                    "createdAt": tag["created_at"],
+                    "updatedAt": tag["updated_at"],
                 }
-            )
+            })
 
-        return JSONResponse(
-            status_code=200,
-            content={"success": True, "data": all_tags, "count": len(all_tags)},
-        )
+        result = query.order("created_at", desc=True).execute()
+        all_tags = []
+
+        for tag in result.data:
+            stats = tag.get("tag_stats", {})
+            if isinstance(stats, list):
+                usage = stats[0].get("usage_count", 0) if stats else 0
+            else:
+                usage = stats.get("usage_count", 0) if stats else 0
+
+            all_tags.append({
+                "id": tag["tagid"],
+                "tagName": tag["tag_name"],
+                "tagColor": tag["color_code"],
+                "description": tag["description"],
+                "contentCount": usage,
+                "createdAt": tag["created_at"],
+                "updatedAt": tag["updated_at"],
+            })
+
+        return JSONResponse(content={"success": True, "data": all_tags, "count": len(all_tags)})
 
     except Exception as e:
         print(f"Server Error: {str(e)}")
