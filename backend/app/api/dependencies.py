@@ -20,23 +20,49 @@ async def get_current_user(request: Request) -> Dict[str, Any]:
             token = auth_header.split(" ")[1]
 
     if not token:
-        print("get_current_user: No token found in cookies or Authorization header.")
         raise HTTPException(status_code=401, detail="Authentication required")
 
     if not SUPABASE_JWT_SECRET:
-        raise HTTPException(
-            status_code=500,
-            detail="Server configuration error: SUPABASE_JWT_SECRET not set",
-        )
+        # Warning only, as we might be using ES256 which doesn't need this secret
+        print("Warning: SUPABASE_JWT_SECRET not set. HS256 verification will fail.")
 
     try:
-        # Locally verify the signature, expiration, and audience
-        payload = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            options={"verify_aud": False},
-        )
+        unverified_header = jwt.get_unverified_header(token)
+        alg = unverified_header.get("alg")
+
+        if alg == "HS256":
+            if not SUPABASE_JWT_SECRET:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Server configuration error: SUPABASE_JWT_SECRET not set for HS256",
+                )
+            payload = jwt.decode(
+                token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                options={"verify_aud": False},
+            )
+        elif alg == "ES256" or alg == "RS256":
+            supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+            if not supabase_url:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Server configuration error: NEXT_PUBLIC_SUPABASE_URL not set for JWKS",
+                )
+            # Fetch JWKS
+            jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+            signing_key = jwt.PyJWKClient(jwks_url).get_signing_key_from_jwt(token)
+
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=[alg],
+                options={"verify_aud": False},
+            )
+        else:
+            raise HTTPException(
+                status_code=401, detail=f"Unsupported token algorithm: {alg}"
+            )
 
         return {
             "id": payload.get("sub"),
@@ -57,7 +83,6 @@ async def get_optional_user(request: Request) -> Optional[Dict[str, Any]]:
     try:
         return await get_current_user(request)
     except HTTPException as e:
-        print(f"get_optional_user failed: {e.detail}")
         if e.status_code == 401:
             return None
         raise e
