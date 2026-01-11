@@ -674,3 +674,53 @@ CREATE POLICY "Users can insert own messages" ON messages FOR INSERT TO authenti
 
 CREATE INDEX idx_conversations_user_updated ON conversations(userid, updated_at DESC);
 CREATE INDEX idx_messages_conv_created ON messages(conv_id, created_at ASC);
+
+-- =============================================================================
+-- 13. USER CONTENT STATISTICS
+-- =============================================================================
+
+-- 1. The Simple Stats Table
+CREATE TABLE IF NOT EXISTS user_content_stats (
+    userid UUID PRIMARY KEY REFERENCES users(userid) ON DELETE CASCADE,
+    total_content_count INTEGER DEFAULT 0,
+    last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. Security (RLS)
+ALTER TABLE user_content_stats ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Owner Only" ON user_content_stats;
+CREATE POLICY "Owner Only" ON user_content_stats 
+FOR ALL TO authenticated USING (auth.uid() = userid);
+
+-- 3. The Automation Trigger Logic
+CREATE OR REPLACE FUNCTION update_user_content_count()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        -- Upsert: Create row if missing, otherwise increment
+        INSERT INTO user_content_stats (userid, total_content_count, last_activity_at)
+        VALUES (NEW.userid, 1, NOW())
+        ON CONFLICT (userid) 
+        DO UPDATE SET 
+            total_content_count = user_content_stats.total_content_count + 1,
+            last_activity_at = NOW();
+        RETURN NEW;
+    
+    ELSIF (TG_OP = 'DELETE') THEN
+        -- Decrement
+        UPDATE user_content_stats
+        SET total_content_count = GREATEST(0, total_content_count - 1)
+        WHERE userid = OLD.userid;
+        RETURN OLD;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 4. Attach Trigger to Content Table
+DROP TRIGGER IF EXISTS trg_maintain_content_count ON content;
+CREATE TRIGGER trg_maintain_content_count
+AFTER INSERT OR DELETE ON content
+FOR EACH ROW
+EXECUTE FUNCTION update_user_content_count();
