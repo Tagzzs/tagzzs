@@ -135,78 +135,34 @@ async def delete_tags(
 
         user_id = user.get("id")
         tag_id = payload.tagId
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
+        
         if tag_id:
-            tag_ref = (
-                admin_db.collection("users")
-                .document(user_id)
-                .collection("tags")
-                .document(tag_id)
-            )
-            if not tag_ref.get().exists:
+            # Check if tag exists and belongs to user
+            check_res = supabase.table("tags").select("tagid").eq("tagid", tag_id).eq("userid", user_id).execute()
+            if not check_res.data:
                 return JSONResponse(status_code=404, content={"error": "Tag not found"})
 
-            # Fetch content that uses this tag
-            content_collection = (
-                admin_db.collection("users").document(user_id).collection("content")
-            )
-            tagged_content = content_collection.where(
-                "tagsId", "array_contains", tag_id
-            ).get()
-
-            if len(tagged_content) > 0:
-                batch = admin_db.batch()
-                for content_doc in tagged_content:
-                    tags_list = content_doc.to_dict().get("tagsId", [])
-                    updated_tags = [t for t in tags_list if t != tag_id]
-                    batch.update(
-                        content_doc.reference,
-                        {"tagsId": updated_tags, "updatedAt": now},
-                    )
-                batch.commit()
-
-            tag_ref.delete()
-
-            try:
-                FirebaseUserService.update_tags_count(user_id, -1)
-            except Exception:
-                pass
-
+            delete_res = supabase.table("tags").delete().eq("tagid", tag_id).eq("userid", user_id).execute()
+            
             return JSONResponse(
-                status_code=200, content={"success": True, "tagId": tag_id}
+                status_code=200, 
+                content={"success": True, "tagId": tag_id}
             )
-
+        
         # Handle Bulk Delete
         else:
-            content_collection = (
-                admin_db.collection("users").document(user_id).collection("content")
-            )
-            content_snapshot = content_collection.get()
-
-            if len(content_snapshot) > 0:
-                c_batch = admin_db.batch()
-                for doc in content_snapshot:
-                    c_batch.update(doc.reference, {"tagsId": [], "updatedAt": now})
-                c_batch.commit()
-
-            # Batch delete all tags
-            tags_ref = admin_db.collection("users").document(user_id).collection("tags")
-            tags_snapshot = tags_ref.get()
-            t_batch = admin_db.batch()
-            for doc in tags_snapshot:
-                t_batch.delete(doc.reference)
-            t_batch.commit()
-
-            admin_db.collection("users").document(user_id).update(
-                {"totalTags": 0, "updatedAt": now}
-            )
-
+            # This will trigger cascades for all user's content_tags and tag_stats
+            bulk_res = supabase.table("tags").delete().eq("userid", user_id).execute()
+            
+            count = len(bulk_res.data) if bulk_res.data else 0
+            
             return JSONResponse(
-                status_code=200, content={"success": True, "count": len(tags_snapshot)}
+                status_code=200, 
+                content={"success": True, "count": count}
             )
 
     except Exception as e:
+        print(f"Delete Error: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -221,90 +177,61 @@ async def update_tag(
         user_id = user.get("id")
         tag_id = payload.tagId
 
-        # Check if user exists
-        user_ref = admin_db.collection("users").document(user_id)
-        if not user_ref.get().exists:
-            return JSONResponse(status_code=404, content={"error": "User not found"})
-
-        # Check if tag exists
-        tag_ref = user_ref.collection("tags").document(tag_id)
-        tag_snapshot = tag_ref.get()
-        if not tag_snapshot.exists:
-            return JSONResponse(status_code=404, content={"error": "Tag not found"})
-
-        # Calculate current contentCount
-        content_collection = user_ref.collection("content")
-        content_snapshot = content_collection.where(
-            "tagsId", "array_contains", tag_id
-        ).get()
-        current_content_count = len(content_snapshot)
-
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        update_payload: Dict[str, Any] = {
-            "contentCount": current_content_count,
-            "updatedAt": now,
-        }
-
+        # Prepare updates based on schema fields
+        update_data = {}
         if payload.tagName is not None:
-            update_payload["tagName"] = payload.tagName
+            update_data["tag_name"] = payload.tagName
+            update_data["slug"] = generate_tag_slug(payload.tagName)
         if payload.tagColor is not None:
-            update_payload["colorCode"] = payload.tagColor
+            update_data["color_code"] = payload.tagColor
         if payload.description is not None:
-            update_payload["description"] = payload.description
+            update_data["description"] = payload.description
 
-        # Update and Fetch updated doc
-        tag_ref.update(update_payload)
-        updated_data = tag_ref.get().to_dict()
+        if not update_data:
+            return JSONResponse(status_code=400, content={"error": "No fields provided for update"})
+
+        # Execute update in Supabase
+        result = (
+            supabase.table("tags")
+            .update(update_data)
+            .eq("tagid", tag_id)
+            .eq("userid", user_id)
+            .execute()
+        )
+
+        if not result.data:
+            return JSONResponse(status_code=404, content={"error": "Tag not found or unauthorized"})
+
+        updated_tag = result.data[0]
+
+        # Fetch current stats to return a complete object to the frontend
+        stats_res = (
+            supabase.table("tag_stats")
+            .select("usage_count")
+            .eq("tagid", tag_id)
+            .execute()
+        )
+        usage = stats_res.data[0].get("usage_count", 0) if stats_res.data else 0
 
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
                 "message": "Tag updated successfully",
-                "updatedFields": [
-                    k
-                    for k in ["tagName", "tagColor", "description"]
-                    if getattr(payload, k) is not None
-                ],
-                "data": updated_data,
+                "data": {
+                    "id": updated_tag["tagid"],
+                    "tagName": updated_tag["tag_name"],
+                    "tagColor": updated_tag["color_code"],
+                    "description": updated_tag["description"],
+                    "contentCount": usage,
+                    "createdAt": updated_tag["created_at"],
+                    "updatedAt": updated_tag["updated_at"],
+                },
             },
         )
 
     except Exception as e:
         print(f"Update Error: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": "Internal server error"})
-
-
-@router.get("/edit")
-async def get_tag(userId: str, tagId: str):
-    try:
-        # Validate parameters
-        if not userId or not tagId:
-            return JSONResponse(
-                status_code=400, content={"error": "User ID and Tag ID are required"}
-            )
-
-        # Check user existence
-        user_ref = admin_db.collection("users").document(userId)
-        if not user_ref.get().exists:
-            return JSONResponse(status_code=404, content={"error": "User not found"})
-
-        # Get the tag document
-        tag_ref = user_ref.collection("tags").document(tagId)
-        tag_doc = tag_ref.get()
-
-        if not tag_doc.exists:
-            return JSONResponse(status_code=404, content={"error": "Tag not found"})
-
-        # Construct response data (id + data)
-        tag_data = {"id": tag_doc.id, **tag_doc.to_dict()}
-
-        return JSONResponse(
-            status_code=200, content={"success": True, "data": tag_data}
-        )
-
-    except Exception as e:
-        print(f"Get Error: {str(e)}")
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
