@@ -219,7 +219,9 @@ USING (auth.uid() = userid) WITH CHECK (auth.uid() = userid);
 -- =============================================================================
 
 -- VIEW: Smart Tag Tree
-CREATE OR REPLACE VIEW tags_tree AS
+CREATE OR REPLACE VIEW tags_tree 
+WITH (security_invoker = true)
+AS
 WITH RECURSIVE tag_hierarchy AS (
     SELECT 
         tagid, userid, tag_name, slug, color_code, parent_id, 

@@ -1,12 +1,10 @@
 # app/api/user_database/content.py
 import time
-import os
-import re
 import uuid
 import random
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Request, Depends, Query
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from pydantic import BaseModel, Field, HttpUrl

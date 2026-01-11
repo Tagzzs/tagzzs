@@ -488,10 +488,14 @@ export default function AddContentPage() {
         thumbFormData.append("file", pendingThumbnailBlob, "thumbnail.jpg");
         thumbFormData.append("fileType", "thumbnail");
 
-        const thumbResponse = await fetch("/api/upload", {
-          method: "POST",
-          body: thumbFormData,
-        });
+        const thumbResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`,
+          {
+            method: "POST",
+            credentials: "include",
+            body: thumbFormData,
+          }
+        );
 
         if (thumbResponse.ok) {
           const thumbResult = await thumbResponse.json();
@@ -499,11 +503,15 @@ export default function AddContentPage() {
         }
       } else if (pendingThumbnailUrl) {
         // Upload from external URL
-        const uploadResponse = await fetch("/api/upload/from-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageUrl: pendingThumbnailUrl }),
-        });
+        const uploadResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload/from-url`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ imageUrl: pendingThumbnailUrl }),
+          }
+        );
 
         if (uploadResponse.ok) {
           const uploadResult = await uploadResponse.json();
