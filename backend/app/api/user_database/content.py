@@ -10,18 +10,10 @@ from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from pydantic import BaseModel, Field, HttpUrl
-from supabase import create_client, Client
 from urllib.parse import urlparse
-from google.cloud.firestore import Query as FirestoreQuery, FieldFilter
 
 # Internal imports
-from app.services.firebase.firebase_admin_setup import admin_db
-from app.services.firebase.firebase_user_service import FirebaseUserService
 from app.api.dependencies import get_current_user
-from app.services.tag_count_service import (
-    update_multiple_tag_counts,
-    update_tag_counts_on_array_change,
-)
 from app.utils.supabase.auth import create_auth_error, create_auth_response
 from app.utils.supabase.supabase_client import supabase
 
@@ -160,12 +152,12 @@ async def add_content(req: Request):
                 tag: f"#{random.randint(0, 0xFFFFFF):06x}" 
                 for tag in validated_data.tagsId
             }
-            print(tag_color_map)
 
             result = supabase.rpc("sync_full_content", {
                 "p_contentid": content_id,
                 "p_userid": user_id,
                 "p_title": validated_data.title,
+                "p_content_link": str(validated_data.link),
                 "p_description": validated_data.description,
                 "p_thumbnail_url": validated_data.thumbnailUrl,
                 "p_content_type": validated_data.contentType,
@@ -233,99 +225,42 @@ async def delete_content(
                 content={"error": "Content ID is required"}, status_code=400
             )
 
-        # Check if user exists in Firebase
-        user_ref = admin_db.collection("users").document(user_id)
-        user_doc = user_ref.get()
+        content_res = supabase.table("content") \
+            .select("thumbnail_url") \
+            .eq("contentid", content_id) \
+            .eq("userid", user_id) \
+            .execute()
 
-        if not user_doc.exists:
-            return JSONResponse(content={"error": "User not found"}, status_code=404)
+        if not content_res.data:
+            return JSONResponse(content={"error": "Content not found"}, status_code=404)
+
+        thumbnail_url = content_res.data[0].get("thumbnail_url")
+
+        delete_res = supabase.table("content") \
+            .delete() \
+            .eq("contentid", content_id) \
+            .eq("userid", user_id) \
+            .execute()
 
         # If content_id is provided, delete specific content
-        if content_id:
-            content_ref = user_ref.collection("content").document(content_id)
-
-            # Check if content exists and get its data
-            content_doc = content_ref.get()
-            if not content_doc.exists:
-                return JSONResponse(
-                    content={"error": "Content not found"}, status_code=404
-                )
-
+        if thumbnail_url:
             try:
-                raw_data = content_doc.to_dict()
-                content_data = ContentDataSchema.model_validate(raw_data)
-            except Exception as val_error:
-                print(f"Validation Error: {val_error}")
-                return JSONResponse(
-                    content={"error": "Stored content data is invalid"}, status_code=500
-                )
+                file_name = thumbnail_url.split("/")[-1]
+                if file_name:
+                    # Assumes your 'user_thumbnails' bucket structure matches the filename extraction
+                    supabase.storage.from_("user_thumbnails").remove([f"{user_id}/{file_name}"])
+            except Exception as storage_error:
+                print(f"Warning: Error deleting thumbnail: {storage_error}")
 
-            # Delete thumbnail from Supabase Storage if it exists
-            thumbnail_url = content_data.thumbnailUrl
-            if thumbnail_url:
-                try:
-                    supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-                    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-                    if supabase_url and supabase_key:
-                        supabase: Client = create_client(supabase_url, supabase_key)
-
-                        # Extract the file name from the thumbnail URL
-                        url_parts = thumbnail_url.split("/")
-                        file_name = url_parts[-1]
-
-                        if file_name:
-                            supabase.storage.from_("user_thumbnails").remove(
-                                [file_name]
-                            )
-
-                except Exception as storage_error:
-                    print(f"Warning: Error deleting thumbnail: {storage_error}")
-                    # content will still be deleted from database
-
-            # Delete the content document
-            content_ref.delete()
-
-            # Update user's totalContent count
-            try:
-                await FirebaseUserService.update_content_count(user_id, -1)
-            except Exception:
-                pass
-
-            # Update tag counts if content had tags
-            tags_id = content_data.tagsId
-            if tags_id and len(tags_id) > 0:
-                await update_multiple_tag_counts(user_id, tags_id)
-
-            return JSONResponse(
-                content={
-                    "success": True,
-                    "message": "Content deleted successfully",
-                    "contentId": content_id,
-                    "userId": user_id,
-                },
-                status_code=200,
-            )
-
-        else:
-            content_collection = user_ref.collection("content")
-
-            content_snapshot = content_collection.get()
-            batch = admin_db.batch()
-            for doc in content_snapshot:
-                batch.delete(doc.reference)
-            batch.delete(user_ref)
-            batch.commit()
-
-            return JSONResponse(
-                content={
-                    "success": True,
-                    "message": "User and all associated content deleted successfully",
-                    "userId": user_id,
-                    "deletedContentCount": len(content_snapshot),
-                },
-                status_code=200,
-            )
+        return JSONResponse(
+            content={
+                "success": True,
+                "message": "Content and associated data deleted successfully",
+                "contentId": content_id,
+            },
+            status_code=200,
+        )
 
     except Exception:
         import traceback
@@ -343,187 +278,76 @@ async def update_content(
             return create_auth_error("Authentication required to edit content")
 
         body_dict = await request.json()
-
-        user_id = body_dict.get("userId")
+        user_id = user["id"]
         content_id = body_dict.get("contentId")
 
-        # Validate required fields
-        if not user_id:
-            return JSONResponse(
-                status_code=400, content={"error": "User ID is required"}
-            )
-
         if not content_id:
-            return JSONResponse(
-                status_code=400, content={"error": "Content ID is required"}
-            )
+            return JSONResponse(status_code=400, content={"error": "Content ID is required"})
 
-        # Check if user exists in Firebase
-        user_ref = admin_db.collection("users").document(user_id)
-        user_doc = user_ref.get()
 
-        if not user_doc.exists:
-            return JSONResponse(status_code=404, content={"error": "User not found"})
+        updates = {}
+        if "title" in body_dict: updates["title"] = body_dict["title"]
+        if "description" in body_dict: updates["description"] = body_dict["description"]
+        if "link" in body_dict:
+            updates["link"] = body_dict["link"]
+            updates["contentSource"] = urlparse(body_dict["link"]).hostname
+        if "contentType" in body_dict: updates["contentType"] = body_dict["contentType"]
+        if "readTime" in body_dict: 
+            # Convert HH:MM or string to integer minutes if needed
+            updates["readTime"] = body_dict["readTime"] 
 
-        # Get reference to the content document
-        content_ref = user_ref.collection("content").document(content_id)
+        # Handle Tags (Generate colors for new tags if provided)
+        tag_map = None
+        if "tagsId" in body_dict:
+            tag_map = {tag: f"#{random.randint(0, 0xFFFFFF):06x}" for tag in body_dict["tagsId"]}
 
-        # Check if content exists and get original data
-        content_doc = content_ref.get()
-        if not content_doc.exists:
-            return JSONResponse(status_code=404, content={"error": "Content not found"})
+        # Execute Supabase RPC
+        result = supabase.rpc("update_full_content", {
+            "p_contentid": content_id,
+            "p_userid": user_id,
+            "p_updates": updates,
+            "p_raw_content": body_dict.get("rawContent"), 
+            "p_note_text": body_dict.get("personalNotes"),
+            "p_tag_map": tag_map
+        }).execute()
 
-        original_content_data = content_doc.to_dict()
+        if hasattr(result, 'error') and result.error:
+            raise Exception(result.error.message)
+        
+        updated_res = supabase.table("content").select(
+            "*, notes:personal_notes(note_data), tags:content_tags(tag_details:tags(tagid, tag_name, color_code))"
+        ).eq("contentid", content_id).eq("userid", user_id).execute()
 
-        # Define allowed fields
-        allowed_fields = [
-            "link",
-            "title",
-            "description",
-            "contentType",
-            "contentSource",
-            "personalNotes",
-            "readTime",
-            "tagsId",
-        ]
+        if not updated_res.data:
+            return JSONResponse(status_code=404, content={"error": "Updated content not found"})
 
-        # Filter update fields
-        filtered_update_fields = {}
-        for key, value in body_dict.items():
-            if key in allowed_fields and value is not None:
-                filtered_update_fields[key] = value
+        item = updated_res.data[0]
 
-        # Check if there are any valid fields to update
-        if not filtered_update_fields:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": "No valid fields provided for update",
-                    "allowedFields": allowed_fields,
-                },
-            )
+        nested_tags = item.pop("tags", [])
+        tags_id_list = [t["tag_details"]["tagid"] for t in nested_tags if t.get("tag_details")]
+        notes_list = item.pop("notes", [])
+        personal_notes_text = notes_list[0]["note_data"].get("text", "") if notes_list else ""
 
-        # Validate the update fields
-        validation_errors = []
-
-        if "link" in filtered_update_fields:
-            try:
-                result = urlparse(filtered_update_fields["link"])
-                if not all([result.scheme, result.netloc]):
-                    raise ValueError
-            except Exception:
-                validation_errors.append("Invalid URL format for link")
-
-        if (
-            filtered_update_fields.get("title")
-            and len(filtered_update_fields["title"]) > 50
-        ):
-            validation_errors.append("Title exceeds 50 character limit")
-
-        if (
-            filtered_update_fields.get("description")
-            and len(filtered_update_fields["description"]) > 250
-        ):
-            validation_errors.append("Description exceeds 250 character limit")
-
-        if (
-            filtered_update_fields.get("contentType")
-            and len(filtered_update_fields["contentType"]) > 25
-        ):
-            validation_errors.append("Content type exceeds 25 character limit")
-
-        if (
-            filtered_update_fields.get("personalNotes")
-            and len(filtered_update_fields["personalNotes"]) > 100
-        ):
-            validation_errors.append("Personal notes exceed 100 character limit")
-
-        if filtered_update_fields.get("readTime"):
-            if not re.match(
-                r"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$", filtered_update_fields["readTime"]
-            ):
-                validation_errors.append(
-                    "Invalid time format for readTime (should be HH:MM)"
-                )
-
-        # Return validation errors if any
-        if validation_errors:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Validation failed", "details": validation_errors},
-            )
-
-        # Prepare update payload
-        update_payload = {**filtered_update_fields}
-        update_payload["updatedAt"] = datetime.utcnow().isoformat() + "Z"
-
-        # If link is being updated, update contentSource
-        if "link" in filtered_update_fields:
-            try:
-                update_payload["contentSource"] = urlparse(
-                    filtered_update_fields["link"]
-                ).hostname
-            except Exception:
-                pass
-
-        # Update the document
-        content_ref.update(update_payload)
-
-        # Update tag counts if tagsId changed
-        old_tag_ids = original_content_data.get("tagsId", [])
-        new_tag_ids = filtered_update_fields.get("tagsId")
-
-        if new_tag_ids is not None:
-            await update_tag_counts_on_array_change(user_id, old_tag_ids, new_tag_ids)
-
-        # Get updated document
-        updated_doc = content_ref.get()
-        updated_data = updated_doc.to_dict()
-
-        updated_data["id"] = updated_doc.id
+        mapped_item = {
+            "id": item.get("contentid"),
+            "title": item.get("title"),
+            "description": item.get("description"),
+            "link": item.get("link"),
+            "contentType": item.get("content_type"),
+            "personalNotes": personal_notes_text,
+            "tagsId": tags_id_list,
+            "createdAt": item.get("created_at"),
+            "updatedAt": item.get("updated_at"),
+            "thumbnailUrl": item.get("thumbnail_url")
+        }
 
         return {
             "success": True,
-            "message": "Content updated successfully",
-            "updatedFields": list(filtered_update_fields.keys()),
-            "data": updated_data,
+            "data": mapped_item
         }
 
     except Exception as e:
-        print(f"Error: {e}")
-        return JSONResponse(status_code=500, content={"error": "Internal server error"})
-
-
-@router.get("/edit")
-async def get_content(
-    user_id: str = Query(...),
-    content_id: str = Query(...),
-    user: Dict[str, Any] = Depends(get_current_user),
-):
-    try:
-        if not user:
-            return create_auth_error("Authentication required to edit content")
-
-        # Check if user exists
-        user_ref = admin_db.collection("users").document(user_id)
-        user_doc = user_ref.get()
-
-        if not user_doc.exists:
-            return JSONResponse(status_code=404, content={"error": "User not found"})
-
-        # Get the content document
-        content_ref = user_ref.collection("content").document(content_id)
-        content_doc = content_ref.get()
-
-        if not content_doc.exists:
-            return JSONResponse(status_code=404, content={"error": "Content not found"})
-
-        content_data = content_doc.to_dict()
-        content_data["id"] = content_doc.id
-
-        return {"success": True, "data": content_data}
-
-    except Exception:
+        print(f"Supabase Update Error: {e}")
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
