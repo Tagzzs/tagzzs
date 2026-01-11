@@ -1,24 +1,36 @@
 SQL Setup - 
 -- =============================================================================
 -- TAGZZS MASTER SCHEMA (FINALIZED)
+-- Includes: Auth, Tags, Content, Notes, Storage, Extraction, and Chat
 -- =============================================================================
 
 -- =============================================================================
 -- 0. CLEANUP (Safe Reset)
 -- =============================================================================
 -- We use CASCADE to automatically remove related triggers, keys, and views.
+-- Order matters: Drop children before parents.
+
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS conversations CASCADE;
+DROP TABLE IF EXISTS extraction_results CASCADE;
+DROP TABLE IF EXISTS extraction_queue CASCADE;
+DROP TYPE IF EXISTS extraction_status CASCADE;
+DROP TABLE IF EXISTS rawcontent CASCADE;
 DROP TABLE IF EXISTS personal_notes CASCADE;
 DROP TABLE IF EXISTS content_tags CASCADE;
 DROP TABLE IF EXISTS content CASCADE;
 DROP TABLE IF EXISTS tag_stats CASCADE;
 DROP TABLE IF EXISTS tags CASCADE;
--- Uncomment the next line only if you want to wipe all user profile data:
+-- Uncomment the next line ONLY if you want to wipe all user profile data:
 -- DROP TABLE IF EXISTS users CASCADE; 
 
 DROP VIEW IF EXISTS tags_tree;
 DROP FUNCTION IF EXISTS update_tag_stats_trigger CASCADE;
 DROP FUNCTION IF EXISTS get_or_create_tag CASCADE;
 DROP FUNCTION IF EXISTS normalize_tag_slug CASCADE;
+DROP FUNCTION IF EXISTS claim_next_job CASCADE;
+DROP FUNCTION IF EXISTS sync_full_content CASCADE;
+DROP FUNCTION IF EXISTS update_full_content CASCADE;
 
 -- =============================================================================
 -- 1. EXTENSIONS & HELPERS
@@ -192,7 +204,7 @@ CREATE TRIGGER trg_update_notes_timestamp
     EXECUTE FUNCTION update_updated_at_column();
 
 -- =============================================================================
--- 9. HEAVY TEXT DATA (RAW EXTRACTIONS)
+-- 5. HEAVY TEXT DATA (RAW EXTRACTIONS)
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS rawcontent (
@@ -215,10 +227,11 @@ CREATE POLICY "Owner Only" ON rawcontent FOR ALL TO authenticated
 USING (auth.uid() = userid) WITH CHECK (auth.uid() = userid);
 
 -- =============================================================================
--- 5. VIEWS & LOGIC TRIGGERS
+-- 6. VIEWS & LOGIC TRIGGERS
 -- =============================================================================
 
 -- VIEW: Smart Tag Tree
+-- FIX: Added 'WITH (security_invoker = true)' to respect RLS policies
 CREATE OR REPLACE VIEW tags_tree 
 WITH (security_invoker = true)
 AS
@@ -269,7 +282,7 @@ EXECUTE FUNCTION update_tag_stats_trigger();
 CREATE OR REPLACE FUNCTION get_or_create_tag(
     p_tag_name TEXT,
     p_userid UUID,
-    p_color_code VARCHAR(7) DEFAULT '#808080', -- New parameter
+    p_color_code VARCHAR(7) DEFAULT '#808080', 
     p_parent_id UUID DEFAULT NULL
 ) RETURNS UUID AS $$
 DECLARE
@@ -293,7 +306,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =============================================================================
--- 6. INDEXES & PERFORMANCE
+-- 7. INDEXES & PERFORMANCE
 -- =============================================================================
 
 CREATE INDEX idx_tags_parent ON tags(parent_id);
@@ -303,7 +316,7 @@ CREATE INDEX idx_tag_stats_usage ON tag_stats(userid, usage_count DESC);
 CREATE INDEX idx_notes_search ON personal_notes USING GIN(search_vector);
 
 -- =============================================================================
--- 7. SECURITY (RLS FOR DATA)
+-- 8. SECURITY (RLS FOR CORE DATA)
 -- =============================================================================
 
 ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
@@ -327,8 +340,7 @@ END $$;
 
 
 -- =============================================================================
--- MASTER RPC: sync_full_content (Map-Based Version)
--- Handles: Content Metadata, Raw Text, Notes, and Tag-Color Mapping
+-- 9. MASTER RPCs: SYNC & UPDATE
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION sync_full_content(
@@ -343,14 +355,14 @@ CREATE OR REPLACE FUNCTION sync_full_content(
     p_read_time INTEGER,
     p_raw_content TEXT,
     p_note_data JSONB,
-    p_tag_map JSONB  -- Input format: {"tag_name": "#hexcolor", "another_tag": "#hexcolor"}
+    p_tag_map JSONB 
 ) RETURNS VOID AS $$
 DECLARE
     v_tag_name TEXT;
     v_tag_color TEXT;
     v_tagid UUID;
 BEGIN
-    -- 1. Sync Content Metadata
+    -- 1. Metadata
     INSERT INTO public.content (
         contentid, userid, title, description, 
         thumbnail_url, content_type, content_source, 
@@ -371,28 +383,24 @@ BEGIN
         read_time = EXCLUDED.read_time,
         updated_at = NOW();
 
-    -- 2. Sync Raw Content (Heavy Text Table)
+    -- 2. Raw Content
     INSERT INTO public.rawcontent (contentid, userid, rawcontent)
     VALUES (p_contentid, p_userid, p_raw_content)
     ON CONFLICT (contentid, userid) 
     DO UPDATE SET rawcontent = EXCLUDED.rawcontent;
 
-    -- 3. Sync Personal Notes (Rich Text & Search Vector)
+    -- 3. Notes
     INSERT INTO public.personal_notes (contentid, userid, note_data, updated_at)
     VALUES (p_contentid, p_userid, p_note_data, NOW())
     ON CONFLICT (contentid, userid) 
     DO UPDATE SET note_data = EXCLUDED.note_data, updated_at = NOW();
 
-    -- 4. Sync Tags (Clear slate for this content piece)
+    -- 4. Tags
     DELETE FROM public.content_tags WHERE contentid = p_contentid AND userid = p_userid;
     
-    -- 5. Iterate through the Tag Map to get/create and link
     IF p_tag_map IS NOT NULL AND p_tag_map != '{}'::jsonb THEN
         FOR v_tag_name, v_tag_color IN SELECT * FROM jsonb_each_text(p_tag_map) LOOP
-            -- Call helper to ensure tag exists with the right color
             v_tagid := get_or_create_tag(v_tag_name, p_userid, v_tag_color);
-            
-            -- Link tag to content
             INSERT INTO public.content_tags (contentid, tagid, userid)
             VALUES (p_contentid, v_tagid, p_userid)
             ON CONFLICT DO NOTHING;
@@ -402,22 +410,19 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- MASTER RPC: update_full_content
--- Handles partial updates for Metadata, Raw Text, Notes, and Tags
 CREATE OR REPLACE FUNCTION update_full_content(
     p_contentid UUID,
     p_userid UUID,
-    p_updates JSONB,        -- Fields like title, description, link, etc.
+    p_updates JSONB,
     p_raw_content TEXT DEFAULT NULL,
     p_note_text TEXT DEFAULT NULL,
-    p_tag_map JSONB DEFAULT NULL  -- Format: {"tag_name": "#hexcolor"}
+    p_tag_map JSONB DEFAULT NULL
 ) RETURNS VOID AS $$
 DECLARE
     v_tag_name TEXT;
     v_tag_color TEXT;
     v_tagid UUID;
 BEGIN
-    -- 1. Update Metadata (Dynamic column update)
     UPDATE public.content
     SET 
         title = COALESCE((p_updates->>'title'), title),
@@ -429,7 +434,6 @@ BEGIN
         updated_at = NOW()
     WHERE contentid = p_contentid AND userid = p_userid;
 
-    -- 2. Update Raw Content if provided
     IF p_raw_content IS NOT NULL THEN
         INSERT INTO public.rawcontent (contentid, userid, rawcontent)
         VALUES (p_contentid, p_userid, p_raw_content)
@@ -437,7 +441,6 @@ BEGIN
         DO UPDATE SET rawcontent = EXCLUDED.rawcontent;
     END IF;
 
-    -- 3. Update Personal Notes if provided
     IF p_note_text IS NOT NULL THEN
         INSERT INTO public.personal_notes (contentid, userid, note_data, updated_at)
         VALUES (p_contentid, p_userid, jsonb_build_object('text', p_note_text), NOW())
@@ -445,10 +448,8 @@ BEGIN
         DO UPDATE SET note_data = EXCLUDED.note_data, updated_at = NOW();
     END IF;
 
-    -- 4. Sync Tags if a new map is provided
     IF p_tag_map IS NOT NULL THEN
         DELETE FROM public.content_tags WHERE contentid = p_contentid AND userid = p_userid;
-        
         FOR v_tag_name, v_tag_color IN SELECT * FROM jsonb_each_text(p_tag_map) LOOP
             v_tagid := get_or_create_tag(v_tag_name, p_userid, v_tag_color);
             INSERT INTO public.content_tags (contentid, tagid, userid)
@@ -459,15 +460,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
--- FUNCTION AND TRIGGER TO AUTOMATICALLY POPULATE THE search_vector IN personal_notes
+-- TRIGGER: Sync Note Search Vector
 CREATE OR REPLACE FUNCTION personal_notes_search_sync()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.note_data ? 'text' THEN
         NEW.search_vector = to_tsvector('english', COALESCE(NEW.note_data->>'text', ''));
     ELSE
-        -- Fallback: convert the entire JSONB object to text for searching
         NEW.search_vector = to_tsvector('english', NEW.note_data::text);
     END IF;
     RETURN NEW;
@@ -481,7 +480,7 @@ CREATE TRIGGER trg_sync_notes_search
 
 
 -- =============================================================================
--- 8. STORAGE POLICIES (Idempotent - Safe to Re-run)
+-- 10. STORAGE POLICIES
 -- =============================================================================
 
 -- 8.1 AVATARS
@@ -537,13 +536,11 @@ USING ( bucket_id = 'user_thumbnails' AND (storage.foldername(name))[1] = auth.u
 
 
 -- =============================================================================
--- YOUTUBE EXTRACTION TABLES
+-- 11. YOUTUBE EXTRACTION TABLES & WORKER LOGIC
 -- =============================================================================
 
--- 1. Create Status Enum
 CREATE TYPE extraction_status AS ENUM ('pending', 'processing', 'completed', 'failed');
 
--- 2. Queue Table
 CREATE TABLE extraction_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
@@ -561,25 +558,17 @@ CREATE TABLE extraction_results (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
-
--- 5. Enable RLS
 ALTER TABLE extraction_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE extraction_results ENABLE ROW LEVEL SECURITY;
 
--- =============================================================================
--- RLS POLICIES FOR EXTRACTION
--- =============================================================================
-
--- Queue Table Policies
+-- RLS: Queue
 CREATE POLICY "Users can insert their own extraction requests" 
-ON extraction_queue FOR INSERT TO authenticated 
-WITH CHECK (auth.uid() = user_id);
+ON extraction_queue FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can view their own extraction requests" 
-ON extraction_queue FOR SELECT TO authenticated 
-USING (auth.uid() = user_id);
+ON extraction_queue FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
--- Results Table Policies (Linked via the Queue table)
+-- RLS: Results
 CREATE POLICY "Users can view their own extraction results" 
 ON extraction_results FOR SELECT TO authenticated 
 USING (
@@ -590,11 +579,9 @@ USING (
     )
 );
 
--- Indexing for performance (Worker will query pending items in order)
 CREATE INDEX idx_extraction_queue_status_created ON extraction_queue(status, created_at);
 
-
--- 1. Create the function
+-- WORKER FUNCTION
 CREATE OR REPLACE FUNCTION claim_next_job()
 RETURNS SETOF extraction_queue
 LANGUAGE plpgsql
@@ -620,6 +607,70 @@ BEGIN
 END;
 $$;
 
--- 2. Grant permissions (Run these immediately after)
 GRANT EXECUTE ON FUNCTION claim_next_job() TO service_role;
 GRANT EXECUTE ON FUNCTION claim_next_job() TO authenticated;
+
+
+-- =============================================================================
+-- 12. CONVERSATIONS & CHAT (Added)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS conversations (
+    conv_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    title VARCHAR,
+    message_count INTEGER DEFAULT 0,
+    rating BOOLEAN,
+    feedback TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    msg_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conv_id UUID NOT NULL REFERENCES conversations(conv_id) ON DELETE CASCADE,
+    userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    role VARCHAR CHECK (role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL,
+    sources JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Triggers
+DROP TRIGGER IF EXISTS update_conversations_timestamp ON conversations;
+CREATE TRIGGER update_conversations_timestamp
+    BEFORE UPDATE ON conversations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE OR REPLACE FUNCTION update_conv_message_count()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE conversations
+    SET message_count = message_count + 1, updated_at = NOW()
+    WHERE conv_id = NEW.conv_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_increment_msg_count ON messages;
+CREATE TRIGGER trg_increment_msg_count
+    AFTER INSERT ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION update_conv_message_count();
+
+-- Chat Security
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own conversations" ON conversations FOR SELECT TO authenticated USING (auth.uid() = userid);
+CREATE POLICY "Users can insert own conversations" ON conversations FOR INSERT TO authenticated WITH CHECK (auth.uid() = userid);
+CREATE POLICY "Users can update own conversations" ON conversations FOR UPDATE TO authenticated USING (auth.uid() = userid);
+CREATE POLICY "Users can delete own conversations" ON conversations FOR DELETE TO authenticated USING (auth.uid() = userid);
+
+CREATE POLICY "Users can view own messages" ON messages FOR SELECT TO authenticated USING (auth.uid() = userid);
+CREATE POLICY "Users can insert own messages" ON messages FOR INSERT TO authenticated WITH CHECK (auth.uid() = userid);
+
+CREATE INDEX idx_conversations_user_updated ON conversations(userid, updated_at DESC);
+CREATE INDEX idx_messages_conv_created ON messages(conv_id, created_at ASC);
