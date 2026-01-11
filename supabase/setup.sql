@@ -1,33 +1,33 @@
+SQL Setup - 
 -- =============================================================================
--- Tagzzs - Supabase Database Setup
--- =============================================================================
--- Run this SQL in your Supabase SQL Editor to set up the required tables,
--- functions, triggers, and storage policies.
---
--- Prerequisites:
---   1. Create a Supabase project at https://supabase.com
---   2. Create storage buckets: user_avatars, user_uploads, user_thumbnails
---   3. Run this SQL in the SQL Editor
---
--- License: Apache-2.0
+-- TAGZZS MASTER SCHEMA (FINALIZED)
 -- =============================================================================
 
 -- =============================================================================
--- USERS TABLE
+-- 0. CLEANUP (Safe Reset)
+-- =============================================================================
+-- We use CASCADE to automatically remove related triggers, keys, and views.
+DROP TABLE IF EXISTS personal_notes CASCADE;
+DROP TABLE IF EXISTS content_tags CASCADE;
+DROP TABLE IF EXISTS content CASCADE;
+DROP TABLE IF EXISTS tag_stats CASCADE;
+DROP TABLE IF EXISTS tags CASCADE;
+-- Uncomment the next line only if you want to wipe all user profile data:
+-- DROP TABLE IF EXISTS users CASCADE; 
+
+DROP VIEW IF EXISTS tags_tree;
+DROP FUNCTION IF EXISTS update_tag_stats_trigger CASCADE;
+DROP FUNCTION IF EXISTS get_or_create_tag CASCADE;
+DROP FUNCTION IF EXISTS normalize_tag_slug CASCADE;
+
+-- =============================================================================
+-- 1. EXTENSIONS & HELPERS
 -- =============================================================================
 
--- Create users table
-CREATE TABLE users (
-  userid UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  avatar_url TEXT DEFAULT NULL,
-  PRIMARY KEY (userid)
-);
+-- Enable Fuzzy Search (Crucial for Tag suggestions)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- Create updated_at trigger function
+-- Helper: Auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -36,151 +36,588 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Create trigger for updated_at
+-- Helper: Normalize Slug (e.g., '  React JS  ' -> 'react-js')
+CREATE OR REPLACE FUNCTION normalize_tag_slug(p_name TEXT)
+RETURNS TEXT AS $$
+BEGIN
+    RETURN REGEXP_REPLACE(LOWER(TRIM(p_name)), '[\s_]+', '-', 'g');
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================================================
+-- 2. USER MANAGEMENT
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS users (
+    userid UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    avatar_url TEXT DEFAULT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (userid)
+);
+
+-- Trigger: Maintain updated_at on users
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at 
     BEFORE UPDATE ON users 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
--- Add indexes for performance
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_created_at ON users(created_at);
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
 
--- =============================================================================
--- ROW LEVEL SECURITY (RLS) FOR USERS
--- =============================================================================
-
--- Enable RLS on users table
+-- RLS: Users
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can read their own profile
-CREATE POLICY "Users can view own profile" ON users
-  FOR SELECT USING (auth.uid() = userid);
+DROP POLICY IF EXISTS "Users can view own profile" ON users;
+CREATE POLICY "Users can view own profile" ON users FOR SELECT USING (auth.uid() = userid);
 
--- Policy: Users can update their own profile
-CREATE POLICY "Users can update own profile" ON users
-  FOR UPDATE USING (auth.uid() = userid);
+DROP POLICY IF EXISTS "Users can update own profile" ON users;
+CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = userid);
 
--- Policy: Allow insert during signup
-CREATE POLICY "Allow insert during signup" ON users
-  FOR INSERT WITH CHECK (auth.uid() = userid);
+DROP POLICY IF EXISTS "Allow insert during signup" ON users;
+CREATE POLICY "Allow insert during signup" ON users FOR INSERT WITH CHECK (auth.uid() = userid);
 
--- =============================================================================
--- AUTO-CREATE USER PROFILE ON SIGNUP
--- =============================================================================
-
--- Function to handle new user creation
+-- AUTOMATION: Create Public Profile on Signup
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (userid, name, email, created_at)
-  VALUES (
-    NEW.id, 
-    NEW.raw_user_meta_data->>'name',
-    NEW.email,
-    NOW()
-  );
-  RETURN NEW;
+    INSERT INTO public.users (userid, name, email, created_at)
+    VALUES (
+        NEW.id, 
+        COALESCE(NEW.raw_user_meta_data->>'name', 'New User'),
+        NEW.email,
+        NOW()
+    );
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger to automatically create user profile
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- =============================================================================
--- STORAGE POLICIES: user_avatars bucket
+-- 3. TAGGING SYSTEM TABLES
 -- =============================================================================
 
-CREATE POLICY "Allow insert for user avatars"
-ON storage.objects FOR INSERT TO authenticated
-WITH CHECK (
-  bucket_id = 'user_avatars' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+-- TAGS TABLE
+CREATE TABLE tags (
+    tagid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    
+    parent_id UUID REFERENCES tags(tagid) ON DELETE SET NULL,
+    
+    tag_name VARCHAR NOT NULL,
+    slug VARCHAR NOT NULL,
+    color_code VARCHAR(7) DEFAULT '#808080',
+    description TEXT,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    UNIQUE (userid, slug)
 );
 
-CREATE POLICY "Allow update for user avatars"
-ON storage.objects FOR UPDATE TO authenticated
-USING (
-  bucket_id = 'user_avatars' AND
-  (storage.foldername(name))[1] = auth.uid()::text
-);
-
-CREATE POLICY "Allow delete for user avatars"
-ON storage.objects FOR DELETE TO authenticated
-USING (
-  bucket_id = 'user_avatars' AND
-  (storage.foldername(name))[1] = auth.uid()::text
-);
-
-CREATE POLICY "Allow select for user avatars"
-ON storage.objects FOR SELECT TO authenticated
-USING (
-  bucket_id = 'user_avatars' AND
-  (storage.foldername(name))[1] = auth.uid()::text
-);
-
--- =============================================================================
--- STORAGE POLICIES: user_uploads bucket
--- =============================================================================
-
-CREATE POLICY "Allow uploads on user-uploads"
-ON storage.objects FOR INSERT TO authenticated
-WITH CHECK (
-  bucket_id = 'user_uploads' AND
-  (storage.foldername(name))[1] = auth.uid()::text
-);
-
-CREATE POLICY "Allow downloads on user-uploads"
-ON storage.objects FOR SELECT TO authenticated
-USING (
-  bucket_id = 'user_uploads' AND
-  (storage.foldername(name))[1] = auth.uid()::text
-);
-
-CREATE POLICY "Allow updates on user-uploads"
-ON storage.objects FOR UPDATE TO authenticated
-USING (
-  bucket_id = 'user_uploads' AND
-  (storage.foldername(name))[1] = auth.uid()::text
-);
-
-CREATE POLICY "Allow deletes on user-uploads"
-ON storage.objects FOR DELETE TO authenticated
-USING (
-  bucket_id = 'user_uploads' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+-- TAG STATS
+CREATE TABLE tag_stats (
+    userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    tagid UUID NOT NULL,
+    
+    usage_count INTEGER DEFAULT 0,
+    last_used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    PRIMARY KEY (userid, tagid),
+    FOREIGN KEY (tagid) REFERENCES tags (tagid) ON DELETE CASCADE
 );
 
 -- =============================================================================
--- STORAGE POLICIES: user_thumbnails bucket
+-- 4. CONTENT TABLES
 -- =============================================================================
 
-CREATE POLICY "Allow uploads on user_thumbnails"
-ON storage.objects FOR INSERT TO authenticated
-WITH CHECK (
-  bucket_id = 'user_thumbnails' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+-- CONTENT METADATA
+CREATE TABLE content (
+    contentid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    
+    content_source VARCHAR,
+    content_type VARCHAR,
+    title VARCHAR,
+    thumbnail_url VARCHAR,
+    description TEXT,
+    read_time INTEGER,
+    link VARCHAR,
+    
+    is_deleted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE POLICY "Allow downloads on user_thumbnails"
-ON storage.objects FOR SELECT TO authenticated
-USING (
-  bucket_id = 'user_thumbnails' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+-- CONTENT <-> TAGS JUNCTION
+CREATE TABLE content_tags (
+    contentid UUID NOT NULL,
+    tagid UUID NOT NULL,
+    userid UUID NOT NULL,
+    
+    PRIMARY KEY (contentid, tagid),
+    FOREIGN KEY (contentid) REFERENCES content (contentid) ON DELETE CASCADE,
+    FOREIGN KEY (tagid) REFERENCES tags (tagid) ON DELETE CASCADE
 );
 
-CREATE POLICY "Allow updates on user_thumbnails"
-ON storage.objects FOR UPDATE TO authenticated
-USING (
-  bucket_id = 'user_thumbnails' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+-- PERSONAL NOTES
+CREATE TABLE personal_notes (
+    note_id UUID DEFAULT gen_random_uuid(),
+    contentid UUID NOT NULL,
+    userid UUID NOT NULL,
+    
+    note_data JSONB,
+    search_vector tsvector,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    PRIMARY KEY (contentid, userid),
+    FOREIGN KEY (contentid) REFERENCES content (contentid) ON DELETE CASCADE,
+    FOREIGN KEY (userid) REFERENCES users (userid) ON DELETE CASCADE
 );
 
-CREATE POLICY "Allow deletes on user_thumbnails"
-ON storage.objects FOR DELETE TO authenticated
-USING (
-  bucket_id = 'user_thumbnails' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+CREATE TRIGGER trg_update_notes_timestamp
+    BEFORE UPDATE ON personal_notes
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================================================
+-- 9. HEAVY TEXT DATA (RAW EXTRACTIONS)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS rawcontent (
+    contentid UUID NOT NULL,
+    userid UUID NOT NULL,
+    rawcontent TEXT, -- The full extracted text
+    
+    PRIMARY KEY (contentid, userid),
+    FOREIGN KEY (contentid) REFERENCES content (contentid) ON DELETE CASCADE
 );
+
+-- Index for fast lookup by content
+CREATE INDEX IF NOT EXISTS idx_rawcontent_lookup ON rawcontent(contentid, userid);
+
+-- Security: Owner Access Only
+ALTER TABLE rawcontent ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Owner Only" ON rawcontent;
+CREATE POLICY "Owner Only" ON rawcontent FOR ALL TO authenticated 
+USING (auth.uid() = userid) WITH CHECK (auth.uid() = userid);
+
+-- =============================================================================
+-- 5. VIEWS & LOGIC TRIGGERS
+-- =============================================================================
+
+-- VIEW: Smart Tag Tree
+CREATE OR REPLACE VIEW tags_tree AS
+WITH RECURSIVE tag_hierarchy AS (
+    SELECT 
+        tagid, userid, tag_name, slug, color_code, parent_id, 
+        0 AS level, 
+        tag_name::text AS path_string
+    FROM tags
+    WHERE parent_id IS NULL AND is_deleted = FALSE
+    UNION ALL
+    SELECT 
+        t.tagid, t.userid, t.tag_name, t.slug, t.color_code, t.parent_id, 
+        th.level + 1 AS level, 
+        th.path_string || ' > ' || t.tag_name
+    FROM tags t
+    INNER JOIN tag_hierarchy th ON t.parent_id = th.tagid
+    WHERE t.is_deleted = FALSE
+)
+SELECT * FROM tag_hierarchy;
+
+-- TRIGGER: Automatic Tag Stats Update
+CREATE OR REPLACE FUNCTION update_tag_stats_trigger()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        INSERT INTO tag_stats (userid, tagid, usage_count, last_used_at)
+        VALUES (NEW.userid, NEW.tagid, 1, NOW())
+        ON CONFLICT (userid, tagid) 
+        DO UPDATE SET usage_count = tag_stats.usage_count + 1, last_used_at = NOW();
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        UPDATE tag_stats
+        SET usage_count = GREATEST(0, usage_count - 1)
+        WHERE tagid = OLD.tagid AND userid = OLD.userid;
+        RETURN OLD;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_maintain_tag_stats
+AFTER INSERT OR DELETE ON content_tags
+FOR EACH ROW
+EXECUTE FUNCTION update_tag_stats_trigger();
+
+-- FUNCTION: Get or Create Tag
+CREATE OR REPLACE FUNCTION get_or_create_tag(
+    p_tag_name TEXT,
+    p_userid UUID,
+    p_color_code VARCHAR(7) DEFAULT '#808080', -- New parameter
+    p_parent_id UUID DEFAULT NULL
+) RETURNS UUID AS $$
+DECLARE
+    v_slug TEXT;
+    v_tagid UUID;
+BEGIN
+    v_slug := normalize_tag_slug(p_tag_name);
+    
+    SELECT tagid INTO v_tagid FROM tags WHERE slug = v_slug AND userid = p_userid;
+
+    IF v_tagid IS NULL THEN
+        INSERT INTO tags (userid, tag_name, slug, color_code, parent_id)
+        VALUES (p_userid, TRIM(p_tag_name), v_slug, p_color_code, p_parent_id)
+        RETURNING tagid INTO v_tagid;
+        
+        INSERT INTO tag_stats (userid, tagid, usage_count)
+        VALUES (p_userid, v_tagid, 0);
+    END IF;
+    RETURN v_tagid;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================================================
+-- 6. INDEXES & PERFORMANCE
+-- =============================================================================
+
+CREATE INDEX idx_tags_parent ON tags(parent_id);
+CREATE INDEX idx_tags_slug ON tags(userid, slug);
+CREATE INDEX idx_tags_name_fuzzy ON tags USING GIST (tag_name gist_trgm_ops);
+CREATE INDEX idx_tag_stats_usage ON tag_stats(userid, usage_count DESC);
+CREATE INDEX idx_notes_search ON personal_notes USING GIN(search_vector);
+
+-- =============================================================================
+-- 7. SECURITY (RLS FOR DATA)
+-- =============================================================================
+
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tag_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE content ENABLE ROW LEVEL SECURITY;
+ALTER TABLE content_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personal_notes ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+DECLARE t text;
+BEGIN
+    FOR t IN SELECT table_name FROM information_schema.tables 
+             WHERE table_schema = 'public' 
+             AND table_name IN ('tags', 'tag_stats', 'content', 'content_tags', 'personal_notes')
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "Owner Only" ON %I', t);
+        EXECUTE format('CREATE POLICY "Owner Only" ON %I FOR ALL TO authenticated 
+                        USING (auth.uid() = userid) WITH CHECK (auth.uid() = userid)', t);
+    END LOOP;
+END $$;
+
+
+-- =============================================================================
+-- MASTER RPC: sync_full_content (Map-Based Version)
+-- Handles: Content Metadata, Raw Text, Notes, and Tag-Color Mapping
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION sync_full_content(
+    p_contentid UUID,
+    p_userid UUID,
+    p_title TEXT,
+    p_content_link TEXT,
+    p_description TEXT,
+    p_thumbnail_url TEXT,
+    p_content_type TEXT,
+    p_content_source TEXT,
+    p_read_time INTEGER,
+    p_raw_content TEXT,
+    p_note_data JSONB,
+    p_tag_map JSONB  -- Input format: {"tag_name": "#hexcolor", "another_tag": "#hexcolor"}
+) RETURNS VOID AS $$
+DECLARE
+    v_tag_name TEXT;
+    v_tag_color TEXT;
+    v_tagid UUID;
+BEGIN
+    -- 1. Sync Content Metadata
+    INSERT INTO public.content (
+        contentid, userid, title, description, 
+        thumbnail_url, content_type, content_source, 
+        read_time, updated_at, link
+    )
+    VALUES (
+        p_contentid, p_userid, p_title, p_description, 
+        p_thumbnail_url, p_content_type, p_content_source, 
+        p_read_time, NOW(), p_content_link
+    )
+    ON CONFLICT (contentid) 
+    DO UPDATE SET 
+        title = EXCLUDED.title,
+        description = EXCLUDED.description,
+        thumbnail_url = EXCLUDED.thumbnail_url,
+        content_type = EXCLUDED.content_type,
+        content_source = EXCLUDED.content_source,
+        read_time = EXCLUDED.read_time,
+        updated_at = NOW();
+
+    -- 2. Sync Raw Content (Heavy Text Table)
+    INSERT INTO public.rawcontent (contentid, userid, rawcontent)
+    VALUES (p_contentid, p_userid, p_raw_content)
+    ON CONFLICT (contentid, userid) 
+    DO UPDATE SET rawcontent = EXCLUDED.rawcontent;
+
+    -- 3. Sync Personal Notes (Rich Text & Search Vector)
+    INSERT INTO public.personal_notes (contentid, userid, note_data, updated_at)
+    VALUES (p_contentid, p_userid, p_note_data, NOW())
+    ON CONFLICT (contentid, userid) 
+    DO UPDATE SET note_data = EXCLUDED.note_data, updated_at = NOW();
+
+    -- 4. Sync Tags (Clear slate for this content piece)
+    DELETE FROM public.content_tags WHERE contentid = p_contentid AND userid = p_userid;
+    
+    -- 5. Iterate through the Tag Map to get/create and link
+    IF p_tag_map IS NOT NULL AND p_tag_map != '{}'::jsonb THEN
+        FOR v_tag_name, v_tag_color IN SELECT * FROM jsonb_each_text(p_tag_map) LOOP
+            -- Call helper to ensure tag exists with the right color
+            v_tagid := get_or_create_tag(v_tag_name, p_userid, v_tag_color);
+            
+            -- Link tag to content
+            INSERT INTO public.content_tags (contentid, tagid, userid)
+            VALUES (p_contentid, v_tagid, p_userid)
+            ON CONFLICT DO NOTHING;
+        END LOOP;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- MASTER RPC: update_full_content
+-- Handles partial updates for Metadata, Raw Text, Notes, and Tags
+CREATE OR REPLACE FUNCTION update_full_content(
+    p_contentid UUID,
+    p_userid UUID,
+    p_updates JSONB,        -- Fields like title, description, link, etc.
+    p_raw_content TEXT DEFAULT NULL,
+    p_note_text TEXT DEFAULT NULL,
+    p_tag_map JSONB DEFAULT NULL  -- Format: {"tag_name": "#hexcolor"}
+) RETURNS VOID AS $$
+DECLARE
+    v_tag_name TEXT;
+    v_tag_color TEXT;
+    v_tagid UUID;
+BEGIN
+    -- 1. Update Metadata (Dynamic column update)
+    UPDATE public.content
+    SET 
+        title = COALESCE((p_updates->>'title'), title),
+        description = COALESCE((p_updates->>'description'), description),
+        link = COALESCE((p_updates->>'link'), link),
+        content_type = COALESCE((p_updates->>'contentType'), content_type),
+        content_source = COALESCE((p_updates->>'contentSource'), content_source),
+        read_time = COALESCE((p_updates->>'readTime')::INTEGER, read_time),
+        updated_at = NOW()
+    WHERE contentid = p_contentid AND userid = p_userid;
+
+    -- 2. Update Raw Content if provided
+    IF p_raw_content IS NOT NULL THEN
+        INSERT INTO public.rawcontent (contentid, userid, rawcontent)
+        VALUES (p_contentid, p_userid, p_raw_content)
+        ON CONFLICT (contentid, userid) 
+        DO UPDATE SET rawcontent = EXCLUDED.rawcontent;
+    END IF;
+
+    -- 3. Update Personal Notes if provided
+    IF p_note_text IS NOT NULL THEN
+        INSERT INTO public.personal_notes (contentid, userid, note_data, updated_at)
+        VALUES (p_contentid, p_userid, jsonb_build_object('text', p_note_text), NOW())
+        ON CONFLICT (contentid, userid) 
+        DO UPDATE SET note_data = EXCLUDED.note_data, updated_at = NOW();
+    END IF;
+
+    -- 4. Sync Tags if a new map is provided
+    IF p_tag_map IS NOT NULL THEN
+        DELETE FROM public.content_tags WHERE contentid = p_contentid AND userid = p_userid;
+        
+        FOR v_tag_name, v_tag_color IN SELECT * FROM jsonb_each_text(p_tag_map) LOOP
+            v_tagid := get_or_create_tag(v_tag_name, p_userid, v_tag_color);
+            INSERT INTO public.content_tags (contentid, tagid, userid)
+            VALUES (p_contentid, v_tagid, p_userid)
+            ON CONFLICT DO NOTHING;
+        END LOOP;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- FUNCTION AND TRIGGER TO AUTOMATICALLY POPULATE THE search_vector IN personal_notes
+CREATE OR REPLACE FUNCTION personal_notes_search_sync()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.note_data ? 'text' THEN
+        NEW.search_vector = to_tsvector('english', COALESCE(NEW.note_data->>'text', ''));
+    ELSE
+        -- Fallback: convert the entire JSONB object to text for searching
+        NEW.search_vector = to_tsvector('english', NEW.note_data::text);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_sync_notes_search
+    BEFORE INSERT OR UPDATE ON personal_notes
+    FOR EACH ROW
+    EXECUTE FUNCTION personal_notes_search_sync();
+
+
+-- =============================================================================
+-- 8. STORAGE POLICIES (Idempotent - Safe to Re-run)
+-- =============================================================================
+
+-- 8.1 AVATARS
+DROP POLICY IF EXISTS "Allow insert for user avatars" ON storage.objects;
+CREATE POLICY "Allow insert for user avatars" ON storage.objects FOR INSERT TO authenticated
+WITH CHECK ( bucket_id = 'user_avatars' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow update for user avatars" ON storage.objects;
+CREATE POLICY "Allow update for user avatars" ON storage.objects FOR UPDATE TO authenticated
+USING ( bucket_id = 'user_avatars' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow delete for user avatars" ON storage.objects;
+CREATE POLICY "Allow delete for user avatars" ON storage.objects FOR DELETE TO authenticated
+USING ( bucket_id = 'user_avatars' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow select for user avatars" ON storage.objects;
+CREATE POLICY "Allow select for user avatars" ON storage.objects FOR SELECT TO authenticated
+USING ( bucket_id = 'user_avatars' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+-- 8.2 UPLOADS
+DROP POLICY IF EXISTS "Allow uploads on user-uploads" ON storage.objects;
+CREATE POLICY "Allow uploads on user-uploads" ON storage.objects FOR INSERT TO authenticated
+WITH CHECK ( bucket_id = 'user_uploads' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow downloads on user-uploads" ON storage.objects;
+CREATE POLICY "Allow downloads on user-uploads" ON storage.objects FOR SELECT TO authenticated
+USING ( bucket_id = 'user_uploads' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow updates on user-uploads" ON storage.objects;
+CREATE POLICY "Allow updates on user-uploads" ON storage.objects FOR UPDATE TO authenticated
+USING ( bucket_id = 'user_uploads' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow deletes on user-uploads" ON storage.objects;
+CREATE POLICY "Allow deletes on user-uploads" ON storage.objects FOR DELETE TO authenticated
+USING ( bucket_id = 'user_uploads' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+-- 8.3 THUMBNAILS
+DROP POLICY IF EXISTS "Allow uploads on user_thumbnails" ON storage.objects;
+CREATE POLICY "Allow uploads on user_thumbnails" ON storage.objects FOR INSERT TO authenticated
+WITH CHECK ( bucket_id = 'user_thumbnails' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow downloads on user_thumbnails" ON storage.objects;
+CREATE POLICY "Allow downloads on user_thumbnails" ON storage.objects FOR SELECT TO authenticated
+USING ( bucket_id = 'user_thumbnails' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow updates on user_thumbnails" ON storage.objects;
+CREATE POLICY "Allow updates on user_thumbnails" ON storage.objects FOR UPDATE TO authenticated
+USING ( bucket_id = 'user_thumbnails' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+DROP POLICY IF EXISTS "Allow deletes on user_thumbnails" ON storage.objects;
+CREATE POLICY "Allow deletes on user_thumbnails" ON storage.objects FOR DELETE TO authenticated
+USING ( bucket_id = 'user_thumbnails' AND (storage.foldername(name))[1] = auth.uid()::text );
+
+
+-- =============================================================================
+-- YOUTUBE EXTRACTION TABLES
+-- =============================================================================
+
+-- 1. Create Status Enum
+CREATE TYPE extraction_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+
+-- 2. Queue Table
+CREATE TABLE extraction_queue (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    video_url TEXT NOT NULL,
+    status extraction_status DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+-- 3. Results Table
+CREATE TABLE extraction_results (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    queue_id UUID NOT NULL REFERENCES extraction_queue(id) ON DELETE CASCADE,
+    data JSONB, 
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+
+-- 5. Enable RLS
+ALTER TABLE extraction_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extraction_results ENABLE ROW LEVEL SECURITY;
+
+-- =============================================================================
+-- RLS POLICIES FOR EXTRACTION
+-- =============================================================================
+
+-- Queue Table Policies
+CREATE POLICY "Users can insert their own extraction requests" 
+ON extraction_queue FOR INSERT TO authenticated 
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can view their own extraction requests" 
+ON extraction_queue FOR SELECT TO authenticated 
+USING (auth.uid() = user_id);
+
+-- Results Table Policies (Linked via the Queue table)
+CREATE POLICY "Users can view their own extraction results" 
+ON extraction_results FOR SELECT TO authenticated 
+USING (
+    EXISTS (
+        SELECT 1 FROM extraction_queue 
+        WHERE extraction_queue.id = extraction_results.queue_id 
+        AND extraction_queue.user_id = auth.uid()
+    )
+);
+
+-- Indexing for performance (Worker will query pending items in order)
+CREATE INDEX idx_extraction_queue_status_created ON extraction_queue(status, created_at);
+
+
+-- 1. Create the function
+CREATE OR REPLACE FUNCTION claim_next_job()
+RETURNS SETOF extraction_queue
+LANGUAGE plpgsql
+SECURITY DEFINER 
+AS $$
+DECLARE
+  next_job_id UUID;
+BEGIN
+  SELECT id INTO next_job_id
+  FROM extraction_queue
+  WHERE status = 'pending'
+  ORDER BY created_at ASC
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED;
+
+  IF next_job_id IS NOT NULL THEN
+    RETURN QUERY
+    UPDATE extraction_queue
+    SET status = 'processing'
+    WHERE id = next_job_id
+    RETURNING *;
+  END IF;
+END;
+$$;
+
+-- 2. Grant permissions (Run these immediately after)
+GRANT EXECUTE ON FUNCTION claim_next_job() TO service_role;
+GRANT EXECUTE ON FUNCTION claim_next_job() TO authenticated;
