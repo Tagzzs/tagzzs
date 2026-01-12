@@ -163,7 +163,8 @@ async def add_content(req: Request):
                 "p_read_time": int(validated_data.readTime or 0),
                 "p_raw_content": validated_data.rawContent,
                 "p_note_data": {"text": validated_data.personalNotes},
-                "p_tag_map": tag_color_map
+                "p_tag_map": tag_color_map,
+                "p_embedding_metadata": embedding_metadata
             }).execute()
 
             if hasattr(result, 'error') and result.error:

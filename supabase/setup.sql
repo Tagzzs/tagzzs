@@ -355,7 +355,8 @@ CREATE OR REPLACE FUNCTION sync_full_content(
     p_read_time INTEGER,
     p_raw_content TEXT,
     p_note_data JSONB,
-    p_tag_map JSONB 
+    p_tag_map JSONB,
+    p_embedding_metadata JSONB DEFAULT NULL
 ) RETURNS VOID AS $$
 DECLARE
     v_tag_name TEXT;
@@ -405,6 +406,27 @@ BEGIN
             VALUES (p_contentid, v_tagid, p_userid)
             ON CONFLICT DO NOTHING;
         END LOOP;
+    END IF;
+
+    -- 5. Embeddings Metadata
+    IF p_embedding_metadata IS NOT NULL THEN
+        INSERT INTO public.content_embeddings (
+            contentid, userid, chroma_doc_ids, summary_doc_id, chunk_count, updated_at
+        )
+        VALUES (
+            p_contentid, 
+            p_userid, 
+            ARRAY(SELECT jsonb_array_elements_text(p_embedding_metadata->'chromaDocIds')),
+            p_embedding_metadata->>'summaryDocId',
+            (p_embedding_metadata->>'chunkCount')::INTEGER,
+            NOW()
+        )
+        ON CONFLICT (contentid, userid) 
+        DO UPDATE SET 
+            chroma_doc_ids = EXCLUDED.chroma_doc_ids,
+            summary_doc_id = EXCLUDED.summary_doc_id,
+            chunk_count = EXCLUDED.chunk_count,
+            updated_at = NOW();
     END IF;
 END;
 $$ LANGUAGE plpgsql;
@@ -724,3 +746,24 @@ CREATE TRIGGER trg_maintain_content_count
 AFTER INSERT OR DELETE ON content
 FOR EACH ROW
 EXECUTE FUNCTION update_user_content_count();
+
+
+-- Storing content embeddings metadata
+CREATE TABLE IF NOT EXISTS content_embeddings (
+    contentid UUID NOT NULL REFERENCES content(contentid) ON DELETE CASCADE,
+    userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    
+    chroma_doc_ids TEXT[], 
+    summary_doc_id TEXT, 
+    chunk_count INTEGER DEFAULT 0,
+    
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (contentid, userid)
+);
+
+-- Security
+ALTER TABLE content_embeddings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Owner Only" ON content_embeddings 
+FOR ALL TO authenticated 
+USING (auth.uid() = userid) WITH CHECK (auth.uid() = userid);
