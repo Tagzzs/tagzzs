@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
@@ -202,29 +202,81 @@ async def get_user_stats(
         if not user:
             return create_auth_error("Authentication required to view stats")
 
+        if not supabase:
+            return JSONResponse(
+                status_code=500, content={"error": "Supabase configuration missing"}
+            )
+
         user_id = user.get("id")
 
-        # Internal import to avoid circular dependency if placed at top
-        from app.services.firebase.firebase_user_service import FirebaseUserService
+        stats_res = (
+            supabase.table("user_content_stats")
+            .select("total_content_count, last_activity_at")
+            .eq("userid", user_id)
+            .single()
+            .execute()
+        )
 
-        user_data = FirebaseUserService.get_user_document(user_id)
+        content_count = 0
+        last_activity = None
 
-        if not user_data:
-            # Just return zeros if no user doc (might be new user)
-            return JSONResponse(
-                status_code=200,
-                content={"success": True, "stats": {"totalContent": 0, "totalTags": 0}},
-            )
+        if stats_res.data:
+            content_count = stats_res.data.get("total_content_count", 0)
+            last_activity = stats_res.data.get("last_activity_at")
+
+        tags_res = (
+            supabase.table("tags")
+            .select("*", count="exact", head=True)
+            .eq("userid", user_id)
+            .execute()
+        )
+
+        tags_count = tags_res.count if tags_res.count is not None else 0
+
+        one_week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        week_res = (
+            supabase.table("content")
+            .select("*", count="exact", head=True)
+            .eq("userid", user_id)
+            .gte("created_at", one_week_ago)
+            .execute()
+        )
+        this_week_count = week_res.count if week_res.count is not None else 0
+
+        top_tag_res = (
+            supabase.table("tag_stats")
+            .select("usage_count, tags(tag_name)")
+            .eq("userid", user_id)
+            .order("usage_count", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        top_tag_name = ""
+        top_tag_count = 0
+
+        if top_tag_res.data:
+            top_item = top_tag_res.data[0]
+            top_tag_count = top_item.get("usage_count", 0)
+            tag_rel = top_item.get("tags")
+            if isinstance(tag_rel, dict):
+                top_tag_name = tag_rel.get("tag_name", "")
+            elif isinstance(tag_rel, str):
+                top_tag_name = tag_rel  # Fallback
 
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
                 "stats": {
-                    "totalContent": user_data.get("totalContent", 0),
-                    "totalTags": user_data.get("totalTags", 0),
-                    "createdAt": user_data.get("createdAt"),
-                    "updatedAt": user_data.get("updatedAt"),
+                    "totalContent": content_count,
+                    "totalTags": tags_count,
+                    "thisWeekItems": this_week_count,
+                    "topTagName": top_tag_name,
+                    "topTagCount": top_tag_count,
+                    "updatedAt": last_activity
+                    or datetime.now(timezone.utc).isoformat(),
+                    "createdAt": user.get("created_at"),
                 },
             },
         )

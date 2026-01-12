@@ -110,17 +110,6 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       setIsLoading(true);
       setError(null);
 
-      // Get auth token
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session!.access_token;
-
-      if (!token) {
-        throw new Error("Authentication required. Please log in again.");
-      }
-
       // Fetch content data
       const contentResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/content/get`,
@@ -258,8 +247,9 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type.toLowerCase()) {
+  const getTypeColor = (type: string | undefined | null) => {
+    const safeType = type?.toLowerCase() || "link";
+    switch (safeType) {
       case "article":
         return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
       case "video":
@@ -293,10 +283,6 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
     try {
       setIsSaving(true);
 
-      const supabase = createClient();
-      await supabase.auth.getSession();
-      // const token = session?.access_token;
-      // const userId = session?.user?.id;
 
       // Make API call to update content notes
       const response = await fetch(
@@ -351,11 +337,6 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
     try {
       setIsDeleting(true);
-
-      const supabase = createClient();
-      await supabase.auth.getSession();
-      // const token = session?.access_token;
-      // const userId = session?.user?.id;
 
       // Make API call to delete content
       const response = await fetch(

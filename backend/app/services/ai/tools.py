@@ -81,9 +81,9 @@ class Tools:
         """
         try:
             from app.services.ai.semantic_search import SemanticSearchService
-            from app.connections.firebase.firebase_connections import (
-                fetch_content_by_ids,
-            )
+            import asyncio
+            import os
+            from supabase import create_client
 
             logger.info(f"[TOOLS] Knowledge base search for user {user_id}: {query}")
 
@@ -97,7 +97,27 @@ class Tools:
                 }
 
             content_ids = [r.content_id for r in results]
-            content_details = await fetch_content_by_ids(user_id, content_ids)
+
+            # Fetch content details
+            def _fetch_content():
+                supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+                supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+                if not supabase_url or not supabase_key:
+                    logger.error("[TOOLS] Missing Supabase credentials")
+                    return []
+
+                supabase = create_client(supabase_url, supabase_key)
+
+                # Fetch content and related tags
+                response = (
+                    supabase.table("content")
+                    .select("*, content_tags(tags(tag_name))")
+                    .in_("contentid", content_ids)
+                    .execute()
+                )
+                return response.data
+
+            content_details = await asyncio.to_thread(_fetch_content)
 
             if not content_details:
                 return {
@@ -106,32 +126,42 @@ class Tools:
                 }
 
             content_references = []
+            formatted_items_for_llm = []
+
             for item in content_details:
+                c_id = item.get("contentid", "")
+                title = item.get("title", "Untitled")
+                source_url = item.get("link", "")
+                content_type = item.get("content_type", "")
+                description = item.get("description", "")
+
+                tags_list = []
+                c_tags = item.get("content_tags", [])
+                if c_tags:
+                    for t_entry in c_tags:
+                        tag_obj = t_entry.get("tags")
+                        if tag_obj and isinstance(tag_obj, dict):
+                            tags_list.append(tag_obj.get("tag_name", ""))
+
                 content_references.append(
                     {
-                        "content_id": item.get("content_id", ""),
-                        "title": item.get("title", "Untitled"),
-                        "source_url": item.get("source_url", ""),
-                        "content_type": item.get("content_type", ""),
+                        "content_id": c_id,
+                        "title": title,
+                        "source_url": source_url,
+                        "content_type": content_type,
                     }
                 )
 
-            formatted = []
-            for item in content_details:
-                title = item.get("title", "Untitled")
-                summary = item.get("summary", "")
-                tags = item.get("tags", [])
+                if len(description) > 300:
+                    description = description[:300] + "..."
 
-                if len(summary) > 300:
-                    summary = summary[:300] + "..."
-
-                formatted.append(
-                    f"**{title}**\n{summary}\nTags: {', '.join(tags) if tags else 'None'}"
+                formatted_items_for_llm.append(
+                    f"**{title}**\n{description}\nTags: {', '.join(tags_list) if tags_list else 'None'}"
                 )
 
             text_output = (
                 f"Found {len(content_details)} relevant items from your knowledge base:\n\n"
-                + "\n\n---\n\n".join(formatted)
+                + "\n\n---\n\n".join(formatted_items_for_llm)
             )
 
             logger.info(

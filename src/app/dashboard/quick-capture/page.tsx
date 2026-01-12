@@ -464,83 +464,6 @@ export default function AddContentPage() {
     }));
   };
 
-  /**
-   * Get or create tags and return their IDs
-   */
-  const processTagsAndGetIds = async (
-    tagNames: string[]
-  ): Promise<string[]> => {
-    const tagIds: string[] = [];
-    for (const tagName of tagNames) {
-      try {
-        // First, try to find existing tag
-        const checkResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/get`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include", // Important for HttpOnly cookies
-            body: JSON.stringify({
-              tagName: tagName.trim(),
-            }),
-          }
-        );
-
-        if (checkResponse.ok) {
-          const existingTagResponse = await checkResponse.json();
-          if (
-            existingTagResponse.success &&
-            existingTagResponse.found &&
-            existingTagResponse.tagId
-          ) {
-            tagIds.push(existingTagResponse.tagId);
-            continue;
-          }
-        }
-
-        // If tag doesn't exist, create it
-        const randomColor = `#${Math.floor(Math.random() * 16777215)
-          .toString(16)
-          .padStart(6, "0")
-          .toUpperCase()}`;
-
-        const createResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/tags/add`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-            body: JSON.stringify({
-              tagName: tagName.trim(),
-              colorCode: randomColor,
-              description: `Auto-generated tag for ${tagName.trim()}`,
-            }),
-          }
-        );
-
-        if (createResponse.ok) {
-          const newTagResponse = await createResponse.json();
-          if (newTagResponse.success && newTagResponse.tagId) {
-            tagIds.push(newTagResponse.tagId);
-          }
-        } else {
-          console.error(
-            `Failed to create tag: ${tagName}`,
-            await createResponse.text()
-          );
-        }
-      } catch (error) {
-        console.error(`Error processing tag ${tagName}:`, error);
-      }
-    }
-
-    return tagIds;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -557,11 +480,6 @@ export default function AddContentPage() {
     setIsSubmitting(true);
 
     try {
-      let tagIds: string[] = [];
-      if (formData.tags.length > 0) {
-        tagIds = await processTagsAndGetIds(formData.tags);
-      }
-
       // Upload pending thumbnail if exists (blob or URL)
       let finalThumbnailUrl = "";
       if (pendingThumbnailBlob) {
@@ -570,10 +488,14 @@ export default function AddContentPage() {
         thumbFormData.append("file", pendingThumbnailBlob, "thumbnail.jpg");
         thumbFormData.append("fileType", "thumbnail");
 
-        const thumbResponse = await fetch("/api/upload", {
-          method: "POST",
-          body: thumbFormData,
-        });
+        const thumbResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`,
+          {
+            method: "POST",
+            credentials: "include",
+            body: thumbFormData,
+          }
+        );
 
         if (thumbResponse.ok) {
           const thumbResult = await thumbResponse.json();
@@ -581,11 +503,15 @@ export default function AddContentPage() {
         }
       } else if (pendingThumbnailUrl) {
         // Upload from external URL
-        const uploadResponse = await fetch("/api/upload/from-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageUrl: pendingThumbnailUrl }),
-        });
+        const uploadResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload/from-url`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ imageUrl: pendingThumbnailUrl }),
+          }
+        );
 
         if (uploadResponse.ok) {
           const uploadResult = await uploadResponse.json();
@@ -602,7 +528,7 @@ export default function AddContentPage() {
         description: formData.description,
         rawContent: formData.rawContent, // Include extracted raw content
         personalNotes: formData.notes,
-        tagsId: tagIds,
+        tagsId: formData.tags,
       };
 
       // Only include thumbnailUrl if we have one

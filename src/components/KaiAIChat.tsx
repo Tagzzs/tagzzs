@@ -122,7 +122,7 @@ export default function KaiAIChat() {
 
   useEffect(() => {
     checkHealth();
-    const id = `chat_${uuidv4()}`;
+    const id = uuidv4();
     setConversationId(id);
   }, []);
 
@@ -147,7 +147,7 @@ export default function KaiAIChat() {
     const userId = user.id;
 
     const userMessage: Message = {
-      id: `msg_${Date.now()}`,
+      id: uuidv4(),
       role: "user",
       content: query,
       timestamp: new Date(),
@@ -176,7 +176,7 @@ export default function KaiAIChat() {
           "Content-Type": "application/json",
           "X-User-ID": userId,
         },
-        credentials: "include", // Important for HttpOnly cookies
+        credentials: "include",
         body: JSON.stringify(requestBody),
       });
 
@@ -184,7 +184,7 @@ export default function KaiAIChat() {
 
       if (data.success && data.answer) {
         const assistantMessage: Message = {
-          id: `msg_${Date.now()}`,
+          id: uuidv4(),
           role: "assistant",
           content: data.answer,
           timestamp: new Date(),
@@ -197,20 +197,19 @@ export default function KaiAIChat() {
 
         const userContent = query;
         const assistantContent = data.answer as string;
-        setConversationHistory((prev) => {
-          const updated: Array<{ role: string; content: string }> = [
-            ...prev,
-            { role: "user", content: userContent },
-            { role: "assistant", content: assistantContent },
-          ];
 
-          saveConversationToFirebase(conversationId, updated);
+        setConversationHistory((prev) => [
+          ...prev,
+          { role: "user", content: userContent },
+          { role: "assistant", content: assistantContent },
+        ]);
 
-          return updated;
-        });
+        const newMessagesToSave = [...messages, userMessage, assistantMessage];
+
+        saveConversation(conversationId, newMessagesToSave);
       } else if (data.status === "needs_permission" && data.ui_component) {
         const permissionMessage: Message = {
-          id: `msg_${Date.now()}`,
+          id: uuidv4(),
           role: "assistant",
           content: data.answer || "I need permission to continue.",
           timestamp: new Date(),
@@ -219,7 +218,7 @@ export default function KaiAIChat() {
         setMessages((prev) => [...prev, permissionMessage]);
       } else {
         const errorMessage: Message = {
-          id: `msg_${Date.now()}`,
+          id: uuidv4(),
           role: "assistant",
           content: `❌ ${data.error || "Failed to process query"}`,
           timestamp: new Date(),
@@ -229,7 +228,7 @@ export default function KaiAIChat() {
       }
     } catch (error) {
       const errorMessage: Message = {
-        id: `msg_${Date.now()}`,
+        id: uuidv4(),
         role: "assistant",
         content: `❌ Connection error: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -243,17 +242,19 @@ export default function KaiAIChat() {
     }
   };
 
-  const saveConversationToFirebase = async (
+  const saveConversation = async (
     chatId: string,
-    history: Array<{ role: string; content: string }>,
+    messagesToSave: Message[],
     title?: string
   ) => {
-    if (!chatId || history.length === 0) return;
+    if (!chatId || messagesToSave.length === 0) return;
 
     try {
       const finalTitle =
         title ||
-        history.find((h) => h.role === "user")?.content.substring(0, 50) ||
+        messagesToSave
+          .find((m) => m.role === "user")
+          ?.content.substring(0, 50) ||
         "Untitled Chat";
 
       const response = await fetch(
@@ -267,11 +268,14 @@ export default function KaiAIChat() {
           body: JSON.stringify({
             chatId,
             title: finalTitle,
-            messages: history.map((h) => ({
-              role: h.role,
-              content: h.content,
-              timestamp: Date.now(),
-            })),
+            messages: messagesToSave
+              .filter((m) => m.id !== "welcome")
+              .map((m) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                timestamp: m.timestamp.getTime(),
+              })),
           }),
         }
       );
@@ -334,10 +338,15 @@ export default function KaiAIChat() {
           },
           ...(chat.messages || []).map(
             (
-              m: { role: string; content: string; timestamp?: number },
+              m: {
+                id?: string;
+                role: string;
+                content: string;
+                timestamp?: number;
+              },
               idx: number
             ) => ({
-              id: `msg_loaded_${idx}`,
+              id: m.id || uuidv4(),
               role: m.role,
               content: m.content,
               timestamp: new Date(m.timestamp || Date.now()),
@@ -397,16 +406,10 @@ export default function KaiAIChat() {
 
   const formatStepName = (stepName: string): string => {
     const steps: Record<string, string> = {
-      // ReAct agent steps
       web_search: "Searching the web",
       search_knowledge_base: "Searching your content",
       ask_user_permission: "Requesting permission",
       final_answer: "Generating response",
-      // Legacy steps
-      TaskRouter: "Analyzing request",
-      ContentRetrieval: "Retrieving content",
-      ResponseGeneration: "Generating response",
-      Validation: "Validating response",
     };
     const defaultName = stepName ? stepName.replace(/_/g, " ") : "Processing";
     return (
@@ -466,7 +469,7 @@ export default function KaiAIChat() {
               size="sm"
               onClick={() => {
                 // Start a new conversation without deleting existing saved chats
-                const newId = `chat_${uuidv4()}`;
+                const newId = uuidv4();
                 setConversationId(newId);
                 setConversationHistory([]);
                 setMessages([

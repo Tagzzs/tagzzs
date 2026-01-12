@@ -5,7 +5,6 @@ from fastapi import APIRouter, HTTPException, status, Response, Request, Depends
 from fastapi.responses import RedirectResponse
 from app.api.auth.schemas import SignUpRequest, SignInRequest
 from app.api.auth.supabase_client import get_supabase, get_supabase_admin
-from app.services.firebase.firebase_user_service import FirebaseUserService
 from app.api.dependencies import get_current_user, get_optional_user
 
 
@@ -179,11 +178,6 @@ async def auth_callback(
         except Exception as e:
             print(f"Error syncing user to Supabase: {e}")
 
-        # 4. Sync to Firebase
-        FirebaseUserService.create_user_document(
-            user_id=user_id, created_at=current_time
-        )
-
         # 5. Conditional Redirect Logic
         user_data = (
             admin_supabase.table("users")
@@ -304,15 +298,6 @@ async def sign_up(body: SignUpRequest, response: Response):
     except Exception as db_error:
         # Log error but continue as auth user is already created
         print(f"Supabase DB Warning: {db_error}")
-
-    # Create Firebase user document (Firestore)
-    firebase_success = FirebaseUserService.create_user_document(
-        user_id=user_id, created_at=current_time
-    )
-
-    if not firebase_success:
-        # Log warning but continue
-        print(f"Firebase Sync Warning: Failed to create document for {user_id}")
 
     # Set cookies if session is present
     if res.session:
