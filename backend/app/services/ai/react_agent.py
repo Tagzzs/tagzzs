@@ -1,12 +1,3 @@
-"""
-ReAct Agent - Async Reasoning + Acting Agent
-
-Production-grade agent implementation using:
-- AsyncGroq for LLM interactions
-- Async tools for non-blocking execution
-- Robust error handling and JSON repair
-"""
-
 import json
 import logging
 import re

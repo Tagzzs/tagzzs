@@ -22,11 +22,6 @@ logger = logging.getLogger(__name__)
 # Router instance
 router = APIRouter(prefix="/ai-agent", tags=["ai-agent"])
 
-# ============================================================================
-# AUTHENTICATION HELPER
-# ============================================================================
-
-
 def validate_user_authentication(
     x_user_id: Optional[str], request_user_id: Optional[str]
 ) -> str:
@@ -49,11 +44,6 @@ def validate_user_authentication(
 
     logger.info(f"✅ [AUTH] User authenticated: {user_id}")
     return user_id
-
-
-# ============================================================================
-# REQUEST/RESPONSE MODELS
-# ============================================================================
 
 
 class AgentQueryRequest(BaseModel):
@@ -181,11 +171,6 @@ class TaskListResponse(BaseModel):
 
     available_tools: int = Field(..., description="Number of available tools")
     tools: List[TaskInfo] = Field(..., description="List of available tools")
-
-
-# ============================================================================
-# ENDPOINTS
-# ============================================================================
 
 
 @router.post(
