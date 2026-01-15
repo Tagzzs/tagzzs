@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import { LoadingScreen } from '@/components/ui/loading-screen'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -29,11 +30,7 @@ function AuthGuard({
 
   // Show loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-      </div>
-    )
+    return <LoadingScreen />
   }
 
   // Show fallback if user is not authenticated
@@ -70,11 +67,7 @@ function PublicRoute({
 
   // Show loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-      </div>
-    )
+    return <LoadingScreen />
   }
 
   // User is authenticated, redirect them

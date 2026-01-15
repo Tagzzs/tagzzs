@@ -167,7 +167,7 @@ const iconMap = {
 };
 
 export function LoadingScreen({
-  message = "Loading...",
+  message = "TAGZZS",
   variant = "default",
   showSubtext = true,
 }: LoadingScreenProps) {
@@ -175,7 +175,7 @@ export function LoadingScreen({
   const IconComponent = iconMap[config.icon as keyof typeof iconMap];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-background via-background to-background/95 backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className={`absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r ${config.color} rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-blob`} />
@@ -198,16 +198,16 @@ export function LoadingScreen({
 
         {/* Loading message */}
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent animate-fade-in">
+          <h1 className="text-2xl font-bold text-white animate-fade-in">
             {message}
           </h1>
 
           {showSubtext && (
             <>
-              <p className="text-sm font-medium text-muted-foreground animate-fade-in-delayed">
+              <p className="text-sm font-medium text-zinc-200 animate-fade-in-delayed">
                 {config.subtext}
               </p>
-              <p className="text-xs text-muted-foreground/60 animate-fade-in-delayed-2">
+              <p className="text-xs text-zinc-400 animate-fade-in-delayed-2">
                 {config.description}
               </p>
             </>

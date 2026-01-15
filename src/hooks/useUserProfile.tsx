@@ -3,6 +3,8 @@ import { UserProfile } from "@/types/UserProfile";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import type { Database } from "@/types/supabase/types";
 import { generateAvatar } from "@/utils/avatar-generator";
+import useSWR from "swr";
+import { fetcher } from "@/utils/fetcher";
 
 // Define the users table row type from generated Supabase types
 type UsersRow = Database["public"]["Tables"]["users"]["Row"];
@@ -21,61 +23,35 @@ export function useUserProfile(): UseUserProfileReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchUserProfile = useCallback(async () => {
-    // If not user ID, we might still try fetching /profile if cookie is set,
-    // but useAuth should supply the user.
-    if (!user) {
-      setDbUserData(null);
-      setLoading(false);
-      return;
-    }
+  const { data: result, error: swrError, isLoading: swrLoading, mutate } = useSWR(
+    user?.id ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/profile` : null,
+    fetcher
+  );
 
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/user-database/profile`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch profile");
-      }
-
-      const result = await response.json();
-
+  useEffect(() => {
+    if (result) {
       if (result.success && result.profile) {
         setDbUserData(result.profile);
       } else {
-        // Fallback or error
         console.log("No profile returned from backend");
         setDbUserData(null);
       }
-    } catch (err) {
-      console.error("Profile fetch error:", err);
-      setError(err instanceof Error ? err.message : "Failed to load profile");
-      setDbUserData(null);
-    } finally {
-      setLoading(false);
     }
-  }, [user]);
-  useEffect(() => {
-    setError(null);
+  }, [result]);
 
-    if (user?.id) {
-      fetchUserProfile();
+  useEffect(() => {
+    if (swrError) {
+        console.error("Profile fetch error:", swrError);
+        setError(swrError instanceof Error ? swrError.message : "Failed to load profile");
+        setDbUserData(null);
     } else {
-      setDbUserData(null);
-      setLoading(false);
+        setError(null);
     }
-  }, [user?.id, fetchUserProfile]);
+  }, [swrError]);
+
+  useEffect(() => {
+    setLoading(swrLoading);
+  }, [swrLoading]);
 
   const userProfile = useMemo(() => {
     if (!user) return null;
@@ -102,10 +78,8 @@ export function useUserProfile(): UseUserProfileReturn {
   }, [dbUserData, user]);
 
   const refetch = useCallback(() => {
-    if (user?.id) {
-      fetchUserProfile();
-    }
-  }, [user?.id, fetchUserProfile]);
+    mutate();
+  }, [mutate]);
 
   return {
     userProfile,

@@ -21,7 +21,7 @@ async def embed_and_store_chunks(request: dict):
         from app.connections import get_user_collection
 
         # Validate request
-        required_fields = ["user_id", "content_id", "extracted_text", "summary"]
+        required_fields = ["user_id", "content_id", "extracted_text"]
         for field in required_fields:
             if field not in request or not request[field]:
                 raise ValueError(f"Missing required field: {field}")
@@ -30,7 +30,10 @@ async def embed_and_store_chunks(request: dict):
         user_id = request["user_id"]
         content_id = request["content_id"]
         extracted_text = request["extracted_text"]
-        summary = request["summary"]
+        summary = request.get("summary", "")
+        if not summary or len(summary.strip()) == 0:
+            # Fallback: Use first 200 chars of text as summary
+            summary = extracted_text[:200] + "..." if len(extracted_text) > 200 else extracted_text
         tags = request.get("tags", [])
         source_url = request.get("source_url", "")
         source_type = request.get("source_type", "web")

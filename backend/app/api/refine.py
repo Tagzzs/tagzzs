@@ -651,7 +651,7 @@ async def extract_and_refine_pdf(request: PDFExtractionRequest):
         from app.services.extractors.pdf.orchestrator import (
             extract_pdf_content_orchestrated,
         )
-        from app.services.refiners.refinement_pipeline import (
+        from app.pipelines.refinement_pipeline import (
             process_extracted_content,
             RefinementConfig,
         )
@@ -706,7 +706,7 @@ async def extract_and_refine_image(request: ImageExtractionRequest):
     """Complete pipeline: Extract image → Summarize → Tag"""
     try:
         from app.clients.image_engine import get_image_engine
-        from app.services.refiners.refinement_pipeline import (
+        from app.pipelines.refinement_pipeline import (
             process_extracted_content,
             RefinementConfig,
         )
