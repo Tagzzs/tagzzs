@@ -957,7 +957,7 @@ BEGIN
         v_credit_amount, 
         'promo_code', 
         gen_random_uuid(),
-        sonb_build_object(
+        jsonb_build_object(
             'reason', 'Promo Code',
             'promo_code', p_code
         )
