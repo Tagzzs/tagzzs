@@ -26,7 +26,8 @@ interface AuthContextType {
   refreshSession: () => Promise<void>;
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -39,21 +40,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Check current session from backend (cookies)
   const checkAuth = async () => {
     try {
-      const response = await fetch(
-        `${BACKEND_URL}/auth/me`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include", // Send cookies
-        }
-      );
+      const response = await fetch(`${BACKEND_URL}/auth/me`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Send cookies
+      });
 
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.user) {
-          setUser(data.user);
+          // Merge profile data from DB into user metadata to ensure we have name/avatar
+          const dbProfile = data.profile || {};
+          const mergedUser = {
+            ...data.user,
+            user_metadata: {
+              ...data.user.user_metadata,
+              name: dbProfile.name || data.user.user_metadata?.name,
+              full_name: dbProfile.name || data.user.user_metadata?.full_name,
+              avatar_url:
+                dbProfile.avatar_url || data.user.user_metadata?.avatar_url,
+            },
+          };
+          setUser(mergedUser);
         } else {
           // Verify if we can refresh
           await tryRefreshOrSignout();
@@ -78,14 +88,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const tryRefreshOrSignout = async () => {
     try {
       // Try to refresh
-      const refreshRes = await fetch(
-        `${BACKEND_URL}/auth/refresh`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-        }
-      );
+      const refreshRes = await fetch(`${BACKEND_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
 
       if (refreshRes.ok) {
         const data = await refreshRes.json();
@@ -94,17 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
       }
-      
+
       // If refresh failed, proceed to sign out
       console.log("Session invalid/expired. Clearing cookies...");
-      await fetch(
-        `${BACKEND_URL}/auth/sign-out`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-        }
-      );
+      await fetch(`${BACKEND_URL}/auth/sign-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
       setUser(null);
     } catch (e) {
       console.error("Refresh/Signout failed", e);
@@ -166,29 +170,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const LOCK_KEY = "auth_refresh_lock";
     if (typeof window !== "undefined") {
       const isLocked = localStorage.getItem(LOCK_KEY);
-      const lockTime = parseInt(localStorage.getItem(LOCK_KEY + "_time") || "0");
+      const lockTime = parseInt(
+        localStorage.getItem(LOCK_KEY + "_time") || "0"
+      );
       const now = Date.now();
-      
+
       // If locked and lock is less than 10 seconds old, skip refresh
-      if (isLocked && (now - lockTime < 10000)) {
+      if (isLocked && now - lockTime < 10000) {
         console.log("Session refresh skipped (locked by another tab)");
         return;
       }
-      
+
       // Set lock
       localStorage.setItem(LOCK_KEY, "true");
       localStorage.setItem(LOCK_KEY + "_time", now.toString());
     }
 
     try {
-      const response = await fetch(
-        `${BACKEND_URL}/auth/refresh`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-        }
-      );
+      const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
 
       if (response.ok) {
         const data = await response.json();

@@ -74,7 +74,8 @@ async def upload_file(
         if fileType == "avatar":
             unique_file_name = f"{user['id']}/{timestamp}_{sanitized_name}"
         else:
-            unique_file_name = f"{timestamp}_{sanitized_name}"
+            # Match avatar structure: user_id/timestamp_filename
+            unique_file_name = f"{user['id']}/{timestamp}_{sanitized_name}"
 
         # Upload to Supabase Storage
         supabase.storage.from_(bucket_name).upload(
@@ -157,7 +158,8 @@ async def upload_from_url(
         elif "gif" in content_type:
             ext = "gif"
 
-        unique_file_name = f"preview_{timestamp}.{ext}"
+        # Match avatar structure: user_id/filename
+        unique_file_name = f"{user['id']}/preview_{timestamp}.{ext}"
 
         # Upload
         supabase.storage.from_(bucket_name).upload(

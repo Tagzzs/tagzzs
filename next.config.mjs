@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   // Enable React Strict Mode for better debugging
   reactStrictMode: true,
 
@@ -26,9 +25,6 @@ const nextConfig: NextConfig = {
 
   // Empty turbopack config to silence the warning (Next.js 16 uses Turbopack by default)
   turbopack: {},
-
-  // Security headers disabled for development
-  // async headers() { ... }
 };
 
 export default nextConfig;

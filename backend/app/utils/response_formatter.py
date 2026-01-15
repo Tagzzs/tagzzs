@@ -49,6 +49,7 @@ def format_extract_refine_response(
     original_text_length: int = 0,
     word_count: Optional[int] = None,
     raw_content: str = "",
+    thumbnail_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Format extract-refine pipeline response in standardized format.
@@ -86,6 +87,7 @@ def format_extract_refine_response(
             "domain": domain_info["domain"],
             "subdomain": domain_info["subdomain"],
             "contentType": content_type,
+            "thumbnailUrl": thumbnail_url,
         },
         "content": {
             "title": title,

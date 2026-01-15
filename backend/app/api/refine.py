@@ -738,6 +738,7 @@ async def extract_and_refine_image(request: ImageExtractionRequest):
                 original_text_length=len(content),
                 word_count=len(content.split()),
                 raw_content=content,
+                thumbnail_url=str(request.url),
             )
         else:
             # Vision only path
@@ -761,6 +762,7 @@ async def extract_and_refine_image(request: ImageExtractionRequest):
                 original_text_length=0,
                 word_count=0,
                 raw_content="",
+                thumbnail_url=str(request.url),
             )
 
     except Exception as e:
