@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useContent } from '@/hooks/useContent';
 import { useTags } from '@/hooks/useTags';
+import { useAuthenticatedApi } from '@/hooks/use-authenticated-api';
 import DetailView from '@/app/database/components/DetailView';
 import { X, SidebarSimple } from '@phosphor-icons/react';
 import LibrarySidebar from '@/app/database/components/LibrarySidebar';
@@ -11,14 +12,21 @@ import NeuralMapSidebar from '@/app/database/components/NeuralMapSidebar';
 import FloatingSearchBar from '@/app/database/components/FloatingSearchBar';
 import { buildTreeData } from '@/utils/buildTreeData';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function ContentPage() { 
     const params = useParams();
     const router = useRouter();
     const id = params.id as string;
 
     // Fetch content and tags
-    const { content, loading: contentLoading } = useContent();
+    const { content, loading: contentLoading, refetch } = useContent();
     const { tagsMap, tagTree, loading: tagsLoading } = useTags();
+
+    // API for deletion
+    const api = useAuthenticatedApi();
 
     // Build tree structure from real data
     const treeData = useMemo(() => {
@@ -46,8 +54,19 @@ export default function ContentPage() {
             subCategory: tags[1]?.tagName || '',
             title: currentItem.title,
             desc: currentItem.description || 'No description available.',
-            content: currentItem.description || '', // TODO: Map 'rawContent' from backend when available
-            tags: tags.map(t => t.tagName),
+            content: currentItem.personalNotes || '', // Display personal notes in Notes section
+            tags: tags.map(t => {
+                let name = t.tagName;
+                // If the tag name looks like a UUID, it might be a mistakenly created tag where the name IS the ID of another tag.
+                // Try to resolve the real name from the tagsMap.
+                if (UUID_REGEX.test(name)) {
+                    const originalTag = tagsMap.get(name);
+                    if (originalTag) {
+                        name = originalTag.tagName;
+                    }
+                }
+                return { id: t.id, name };
+            }),
             _original: currentItem
         };
     }, [currentItem, tagsMap]);
@@ -76,8 +95,7 @@ export default function ContentPage() {
     const [aiSummaryVisible, setAiSummaryVisible] = useState(true);
     const [aiSummaryText, setAiSummaryText] = useState('');
 
-    // Neural Graph Ref
-    const graphRef = useRef<SVGSVGElement>(null);
+
 
     const isLoading = contentLoading || tagsLoading;
 
@@ -110,82 +128,63 @@ export default function ContentPage() {
         router.push(`/database?filter=${encodeURIComponent(name)}`);
     }, [router]);
 
-    // Graph Rendering Logic
-    const renderGraph = useCallback(() => {
-        const svg = graphRef.current;
-        if (!svg) return;
-        svg.innerHTML = '';
+    // Delete Handler
+    const handleDelete = useCallback(async () => {
+        if (!currentDetailItem) return;
+        
+        try {
+            await api.callApi(`${BACKEND_URL}/api/user-database/content/delete`, {
+                method: 'DELETE',
+                body: { contentId: currentDetailItem.id }
+            });
+            
+            // Redirect to database on success
+            router.push('/database');
+        } catch (error) {
+            console.error("Failed to delete content:", error);
+        }
+    }, [currentDetailItem, api, router]);
 
-        const w = svg.clientWidth || 320;
-        const h = svg.clientHeight || 200;
-        const cx = w / 2;
-        const cy = h / 2;
+    // Save Handler
+    const handleSave = useCallback(async (updates: { personalNotes?: string; description?: string; tagsId?: string[] }) => {
+        if (!currentDetailItem) return;
 
-        // Item-centric graph (Item in center, Tags surrounding)
-        
-        // Helper functions
-        const createLine = (x1: number, y1: number, x2: number, y2: number, color: string) => {
-            const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            l.setAttribute("x1", String(x1)); l.setAttribute("y1", String(y1));
-            l.setAttribute("x2", String(x2)); l.setAttribute("y2", String(y2));
-            l.setAttribute("stroke", color); l.setAttribute("stroke-width", "1");
-            l.classList.add("link-line");
-            svg.appendChild(l);
-        };
-        const createCircle = (cx: number, cy: number, r: number, color: string, className: string = "node-circle") => {
-            const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            c.setAttribute("cx", String(cx)); c.setAttribute("cy", String(cy));
-            c.setAttribute("r", String(r)); c.setAttribute("fill", color);
-            c.classList.add(className);
-            svg.appendChild(c);
-        };
-        
-        const createText = (x: number, y: number, text: string, color: string, size: number) => {
-            const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
-            t.setAttribute("x", String(x)); t.setAttribute("y", String(y + 15));
-            t.setAttribute("text-anchor", "middle");
-            t.setAttribute("fill", color); t.setAttribute("font-size", String(size));
-            t.textContent = text.length > 10 ? text.substring(0, 8) + '..' : text;
-            t.classList.add("node-text");
-            svg.appendChild(t);
-        };
+        try {
+            await api.callApi(`${BACKEND_URL}/api/user-database/content/edit`, {
+                method: 'PUT',
+                body: { 
+                    contentId: currentDetailItem.id,
+                    ...updates
+                }
+            });
+            // Refetch content to update UI immediately
+            await refetch();
+        } catch (error) {
+            console.error("Failed to update content:", error);
+        }
+    }, [currentDetailItem, api, refetch]);
 
-        // Draw center node (Current Item)
-        // Using "ITEM" label style from screenshot if desired, or just circle
-        createCircle(cx, cy, 14, "#ffffff", "center-pulse");
-        
-        // Center Text "ITEM" or First 4 chars of title
-        const centerLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        centerLabel.setAttribute("x", String(cx)); centerLabel.setAttribute("y", String(cy + 4));
-        centerLabel.setAttribute("text-anchor", "middle");
-        centerLabel.setAttribute("fill", "#000"); 
-        centerLabel.setAttribute("font-size", "8");
-        centerLabel.setAttribute("font-weight", "bold");
-        centerLabel.textContent = "ITEM"; 
-        svg.appendChild(centerLabel);
-        
-        // Draw related nodes (Tags)
-        if (currentDetailItem && currentDetailItem.tags) {
-             const tags = currentDetailItem.tags;
-             const angleStep = (2 * Math.PI) / (tags.length || 1);
-             const radius = 80;
-             
-             tags.forEach((tag: string, i: number) => {
-                 const angle = i * angleStep - (Math.PI / 2); // Start from top
-                 const x = cx + Math.cos(angle) * radius;
-                 const y = cy + Math.sin(angle) * radius;
-                 
-                 createLine(cx, cy, x, y, "#3f3f46");
-                 createCircle(x, y, 6, "#d4d4d8");
-                 createText(x, y, tag, "#a1a1aa", 8);
-             });
+    // Handle Tag Removal
+    const handleRemoveTag = useCallback(async (tagIdToRemove: string) => {
+        if (!currentItem || !tagsMap) return;
+
+        let newTagsIds = currentItem.tagsId.filter(id => id !== tagIdToRemove);
+
+        // Map to Uncategorized if no tags left
+        if (newTagsIds.length === 0) {
+            // Find "Uncategorized" or "General" tag
+            let fallbackTag = Array.from(tagsMap.values()).find(t => t.tagName.toLowerCase() === 'uncategorized');
+            if (!fallbackTag) {
+                 fallbackTag = Array.from(tagsMap.values()).find(t => t.tagName.toLowerCase() === 'general');
+            }
+            
+            if (fallbackTag) {
+                newTagsIds = [fallbackTag.id];
+            }
         }
 
-    }, [currentDetailItem]);
-
-    useEffect(() => {
-        renderGraph();
-    }, [renderGraph]);
+        await handleSave({ tagsId: newTagsIds });
+    }, [currentItem, tagsMap, handleSave]);
 
     // Search Mode State for Floating Bar
     const [searchMode, setSearchMode] = useState<'DB' | 'AI'>('DB');
@@ -248,6 +247,9 @@ export default function ContentPage() {
                         onNavigate={handleNavigate}
                         onToggleEditing={() => setIsEditing(!isEditing)}
                         onToggleSummary={handleToggleSummary}
+                        onDelete={handleDelete}
+                        onSave={handleSave}
+                        onRemoveTag={handleRemoveTag}
                      />
                  )}
              </div>
@@ -256,7 +258,6 @@ export default function ContentPage() {
              <NeuralMapSidebar
                 currentFilter={currentDetailItem?.category || 'All'}
                 currentDetailItem={currentDetailItem}
-                graphRef={graphRef}
              />
         </div>
     );

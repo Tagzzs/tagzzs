@@ -41,7 +41,7 @@ function SwimlanesView({
                                         <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">{item.desc}</p>
                                         <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-900/50">
                                             <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Doc</span>
-                                            <span className="text-[10px] font-bold text-zinc-500 border border-zinc-800 px-2 py-1 rounded-md bg-black uppercase tracking-wider">{item.subCategory.split(' ')[0]}</span>
+                                            <span className="text-[10px] font-bold text-zinc-500 border border-zinc-800 px-2 py-1 rounded-md bg-black uppercase tracking-wider">{item.subCategory?.split(' ')[0] || ''}</span>
                                         </div>
                                     </div>
                                 </div>

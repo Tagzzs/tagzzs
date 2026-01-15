@@ -181,7 +181,7 @@ export default function FloatingSearchBar({
                 <button
                     id="floating-add-btn"
                     onClick={onOpenAddModal}
-                    className={`h-14 px-8 bg-white hover:bg-zinc-200 text-black rounded-full font-bold text-sm shadow-xl flex items-center gap-2 shrink-0 transition-all ${currentFilter !== 'All' || currentDetailItem ? 'add-btn-hidden' : ''}`}
+                    className={`h-14 px-8 bg-white hover:bg-zinc-200 text-black rounded-full font-bold text-sm shadow-xl flex items-center gap-2 shrink-0 transition-all cursor-pointer ${currentFilter !== 'All' || currentDetailItem ? 'add-btn-hidden' : ''}`}
                 >
                     <Plus weight="bold" className="text-lg" /> Add
                 </button>

@@ -283,7 +283,7 @@ export default function SearchBar({ onOpenAddModal, content, tagsMap, onSearchCh
             {/* Add Button */}
             <button
                 onClick={onOpenAddModal}
-                className="pointer-events-auto h-10 lg:h-12 px-4 lg:px-5 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg border border-[#9f63fe]/20 bg-[#4b2976] text-white hover:bg-[#4b2976] hover:border-[#4b2976] hover:shadow-[0_0_15px_rgba(159,85,255,0.3)] overflow-hidden"
+                className="pointer-events-auto h-10 lg:h-12 px-4 lg:px-5 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg border border-[#9f63fe]/20 bg-[#4b2976] text-white hover:bg-[#4b2976] hover:border-[#4b2976] hover:shadow-[0_0_15px_rgba(159,85,255,0.3)] overflow-hidden cursor-pointer"
             >
                 <Plus size={16} weight="bold" className="shrink-0" />
                 <span className={`font-medium text-xs whitespace-nowrap transition-all duration-300 overflow-hidden ${isSearchFocused ? 'opacity-0 max-w-0 ml-0' : 'opacity-100 max-w-[50px] ml-2'}`}>
