@@ -63,7 +63,7 @@ function ActivityCard({ content, tags = [], onClick }: ActivityCardProps) {
                         {content.title}
                     </h4>
                 </div>
-
+                
                 {/* Tags */}
                 <div className="flex flex-wrap gap-1 mb-2 overflow-hidden mt-auto">
                     {tags.slice(0, 2).map((tag) => (
