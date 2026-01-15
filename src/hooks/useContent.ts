@@ -36,17 +36,10 @@ interface UseContentReturn {
   loadMore: () => Promise<void>;
 }
 
+import { useAuthenticatedApi } from '@/hooks/use-authenticated-api';
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
-/**
- * Hook to fetch user content with SWR-style caching and smart revalidation.
- * 
- * Features:
- * - Auto-refresh on window focus (configurable)
- * - Stale-while-revalidate pattern
- * - No unnecessary API calls - uses cached data when fresh
- * - Pagination support with loadMore
- */
 export function useContent(options: UseContentOptions = {}): UseContentReturn {
   const {
     limit = 50,
@@ -55,6 +48,7 @@ export function useContent(options: UseContentOptions = {}): UseContentReturn {
   } = options;
 
   const { user } = useAuth();
+  const api = useAuthenticatedApi();
   const [content, setContent] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,27 +88,11 @@ export function useContent(options: UseContentOptions = {}): UseContentReturn {
     try {
       const currentOffset = isLoadMore ? offset : 0;
       
-      const response = await fetch(`${BACKEND_URL}/api/user-database/content/get`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          limit,
-          offset: currentOffset,
-          sortBy: 'newest',
-        }),
+      const data = await api.post(`${BACKEND_URL}/api/user-database/content/get`, {
+        limit,
+        offset: currentOffset,
+        sortBy: 'newest',
       });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Authentication required');
-        }
-        throw new Error(`Failed to fetch content: ${response.status}`);
-      }
-
-      const data = await response.json();
 
       if (!data.success) {
         throw new Error(data.error?.message || 'Failed to fetch content');
@@ -135,11 +113,14 @@ export function useContent(options: UseContentOptions = {}): UseContentReturn {
     } catch (err) {
       console.error('[useContent] Fetch error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      if (err instanceof Error && err.message === 'Authentication expired') {
+        setContent([]);
+      }
     } finally {
       setLoading(false);
       isFetching.current = false;
     }
-  }, [user, offset, limit, staleTime, content.length]);
+  }, [user, offset, limit, staleTime, content.length, api]);
 
   // Initial fetch
   useEffect(() => {

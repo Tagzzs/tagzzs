@@ -37,16 +37,10 @@ interface UseTagsReturn {
   getTagsByIds: (ids: string[]) => Tag[];
 }
 
+import { useAuthenticatedApi } from '@/hooks/use-authenticated-api';
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
-/**
- * Hook to fetch user tags with caching and lookup utilities.
- * 
- * Features:
- * - Tags are cached longer than content (5 min default) since they change less frequently
- * - Provides a Map for O(1) lookups by tag ID
- * - Helper functions to resolve tag IDs to full Tag objects
- */
 export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
   const {
     revalidateOnFocus = true,
@@ -54,6 +48,7 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
   } = options;
 
   const { user } = useAuth();
+  const api = useAuthenticatedApi(); // Use the authenticated API hook
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,23 +84,7 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
     setError(null);
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/user-database/tags/get`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Authentication required');
-        }
-        throw new Error(`Failed to fetch tags: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await api.post(`${BACKEND_URL}/api/user-database/tags/get`, {});
 
       if (!data.success) {
         throw new Error(data.error?.message || 'Failed to fetch tags');
@@ -127,11 +106,15 @@ export function useTags(options: UseTagsOptions = {}): UseTagsReturn {
     } catch (err) {
       console.error('[useTags] Fetch error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      // If authentication expired, invalidating tags might be appropriate
+      if (err instanceof Error && err.message === 'Authentication expired') {
+        setTags([]);
+      }
     } finally {
       setLoading(false);
       isFetching.current = false;
     }
-  }, [user, staleTime, tags.length]);
+  }, [user, staleTime, tags.length, api]);
 
   // Create a Map for O(1) lookups
   const tagsMap = useMemo(() => {

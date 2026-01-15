@@ -169,10 +169,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setIsSending(true);
 
     try {
-      // Call RAG chat API
-      const data = await api.post(`${BACKEND_URL}/ai-chat/with-rag`, {
-        user_id: user.id,
+      // Call ReAct Agent API (uses agent.py + react_agent.py)
+      const data = await api.post(`${BACKEND_URL}/ai-agent/query`, {
         query: text.trim(),
+        user_id: user.id,
         conversation_history: messages.map(m => ({
           role: m.role === 'user' ? 'user' : 'assistant',
           content: m.content,
@@ -183,6 +183,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       if (data.success && data.answer) {
         aiContent = data.answer;
+      } else if (data.error) {
+        aiContent = `Error: ${data.error}`;
       }
 
       // Add AI response
@@ -199,13 +201,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       // Save to backend
       await saveChat(finalMessages, chatId);
     } catch (error) {
-      console.error('Chat error:', error);
+      console.error('[ChatContext] 🔴 Chat error:', error);
       
-      // Add error message
+      // Add error message with more details
       const errorMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, errorMessage]);

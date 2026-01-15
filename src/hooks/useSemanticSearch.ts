@@ -17,14 +17,13 @@ interface UseSemanticSearchReturn {
   clearResults: () => void;
 }
 
+import { useAuthenticatedApi } from '@/hooks/use-authenticated-api';
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
-/**
- * Hook for performing semantic search on user's content.
- * Uses the backend's vector search with embeddings.
- */
 export function useSemanticSearch(): UseSemanticSearchReturn {
   const { user } = useAuth();
+  const api = useAuthenticatedApi();
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,24 +43,11 @@ export function useSemanticSearch(): UseSemanticSearchReturn {
     setError(null);
 
     try {
-      const response = await fetch(`${BACKEND_URL}/search/semantic-query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          user_id: user.id,
-          query: query.trim(),
-          limit: 10,
-        }),
+      const data = await api.post(`${BACKEND_URL}/search/semantic-query`, {
+        user_id: user.id,
+        query: query.trim(),
+        limit: 10,
       });
-
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.status}`);
-      }
-
-      const data = await response.json();
 
       if (!data.success) {
         throw new Error(data.error || 'Search failed');
@@ -83,7 +69,7 @@ export function useSemanticSearch(): UseSemanticSearchReturn {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, api]);
 
   const clearResults = useCallback(() => {
     setResults([]);

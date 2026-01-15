@@ -248,7 +248,8 @@ export function QuickCaptureModal({ isOpen, onClose, initialData }: QuickCapture
         readTime: '',
         tagsId: previewData.tags,
         thumbnailUrl: previewData.thumbnail || null,
-        rawContent: previewData.summary || rawContent,
+        rawContent: rawContent,
+        summary: previewData.summary || '',
       };
 
       const response = await fetch(`${BACKEND_URL}/api/user-database/content/add`, {

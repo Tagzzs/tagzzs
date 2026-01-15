@@ -26,6 +26,8 @@ interface AuthContextType {
   refreshSession: () => Promise<void>;
 }
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -38,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkAuth = async () => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/me`,
+        `${BACKEND_URL}/auth/me`,
         {
           method: "GET",
           headers: {
@@ -53,33 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.success && data.user) {
           setUser(data.user);
         } else {
-          // Invalid data format, treat as logged out
-          console.warn("Invalid session data received");
-          // We don't necessarily want to force signout here unless we are sure,
-          // but user should be null.
-          setUser(null);
+          // Verify if we can refresh
+          await tryRefreshOrSignout();
         }
       } else {
-        // If 401, it means the token is invalid or USER DOES NOT EXIST
-        // We must force signout to clear the cookies so middleware doesn't think we are logged in
         if (response.status === 401) {
-          console.log(
-            "Session invalid or user deleted. clearing cookies silently..."
-          );
-          // Perform silent cleanup - do not use signOut() as it toggles loading/redirects
-          try {
-            await fetch(
-              `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-out`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-              }
-            );
-          } catch (e) {
-            console.error("Silent signout failed", e);
-          }
-          setUser(null);
+          // Token expired, try refreshing
+          await tryRefreshOrSignout();
         } else {
           setUser(null);
         }
@@ -90,6 +72,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
       setHasInitialized(true);
+    }
+  };
+
+  const tryRefreshOrSignout = async () => {
+    try {
+      // Try to refresh
+      const refreshRes = await fetch(
+        `${BACKEND_URL}/auth/refresh`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        }
+      );
+
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        if (data.success && data.user) {
+          setUser(data.user);
+          return;
+        }
+      }
+      
+      // If refresh failed, proceed to sign out
+      console.log("Session invalid/expired. Clearing cookies...");
+      await fetch(
+        `${BACKEND_URL}/auth/sign-out`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        }
+      );
+      setUser(null);
+    } catch (e) {
+      console.error("Refresh/Signout failed", e);
+      setUser(null);
     }
   };
 
@@ -108,18 +127,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (currentPath.startsWith("/auth/") || currentPath === "/") {
           router.push(redirectTo);
         }
-      } else {
-        // If user is NOT logged in and on protected pages (dashboard), redirect to sign-in
-        // Note: Middleware usually handles this, but client-side check doesn't hurt
-        // We'll leave it to middleware mostly to avoid flicker
       }
     }
   }, [loading, hasInitialized, user, router]);
 
+  // Auto-refresh session every 50 minutes to prevent 1-hour expiry
+  useEffect(() => {
+    if (!user) return;
+
+    const REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minutes
+    const intervalId = setInterval(() => {
+      console.log("Auto-refreshing session...");
+      refreshSession();
+    }, REFRESH_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [user]);
+
   const signOut = async () => {
     try {
       setLoading(true);
-      await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/sign-out`, {
+      await fetch(`${BACKEND_URL}/auth/sign-out`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -134,9 +162,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshSession = async () => {
+    // Check for lock to prevent race conditions across tabs
+    const LOCK_KEY = "auth_refresh_lock";
+    if (typeof window !== "undefined") {
+      const isLocked = localStorage.getItem(LOCK_KEY);
+      const lockTime = parseInt(localStorage.getItem(LOCK_KEY + "_time") || "0");
+      const now = Date.now();
+      
+      // If locked and lock is less than 10 seconds old, skip refresh
+      if (isLocked && (now - lockTime < 10000)) {
+        console.log("Session refresh skipped (locked by another tab)");
+        return;
+      }
+      
+      // Set lock
+      localStorage.setItem(LOCK_KEY, "true");
+      localStorage.setItem(LOCK_KEY + "_time", now.toString());
+    }
+
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/refresh`,
+        `${BACKEND_URL}/auth/refresh`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -155,6 +201,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error("Refresh session error:", error);
+    } finally {
+      // Release lock
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(LOCK_KEY);
+        localStorage.removeItem(LOCK_KEY + "_time");
+      }
     }
   };
 
