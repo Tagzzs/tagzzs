@@ -1,5 +1,5 @@
 """
-Chat Routes
+Chat Routes-optimised
 API endpoints for RAG-based chat operations
 """
 

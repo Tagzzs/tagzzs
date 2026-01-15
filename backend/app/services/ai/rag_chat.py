@@ -8,13 +8,23 @@ from typing import Optional, List
 from dataclasses import dataclass
 from datetime import datetime
 
+# Module-level logger
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ContextChunk:
-    """Context chunk retrieved from vector database"""
+    """
+    Represents a single chunk retrieved from the vector database.
 
+    Attributes:
+    - id: Internal chunk identifier (not DB ID)
+    - content_id: ID of the original saved content
+    - text: Actual chunk text
+    - score: Similarity score from vector search (0–1)
+    - title: Optional title metadata
+    - created_at: Optional timestamp when the content was saved
+    """
     id: str
     content_id: str
     text: str
@@ -25,22 +35,35 @@ class ContextChunk:
 
 @dataclass
 class ChatMessage:
-    """Chat message in conversation history"""
+    """
+    Represents a single message in chat history.
 
-    role: str  # 'user' or 'assistant'
+    role:
+    - 'user' or 'assistant'
+    content:
+    - Raw text of the message
+    """
+    role: str
     content: str
 
 
 class RagChatService:
     """
-    Service for RAG-based chat with conversation history
+    Core service for Retrieval-Augmented Generation (RAG) chat.
 
-    Architecture:
-    ...
+    Responsibilities:
+    - Generate embeddings for user queries
+    - Retrieve relevant context from vector DB
+    - Format retrieved context for LLM consumption
+    - Maintain conversational memory (externally or via caller)
     """
 
     def __init__(self):
+        # Use module logger
         self.logger = logger
+
+        # System prompt injected into LLM calls
+        # Controls tone, behavior, and how retrieved context is used
         self.SYSTEM_PROMPT = """You are a knowledgeable and friendly AI assistant having a natural conversation with a user.
 
 Your role:
@@ -59,38 +82,57 @@ When you have saved content context:
 
 Tone: Friendly, informative, conversational, intelligent"""
 
+        # Max length for embedding inputs (used elsewhere)
         self.MAX_EMBEDDING_LENGTH = 400
 
     def _build_context_string(self, chunks: List[ContextChunk]) -> str:
         """
-        Build context string from retrieved chunks
+        Converts retrieved context chunks into a single formatted string.
 
-        Each context part now includes saved timestamp if available.
+        This string is later injected into the LLM prompt.
+
+        Features:
+        - Includes relevance score as percentage
+        - Includes saved timestamp if available
+        - Separates chunks with visual delimiters
         """
         if not chunks:
             return ""
 
         context_parts = []
+
         for chunk in chunks:
+            # Convert similarity score to percentage for readability
             relevance_percent = int(chunk.score * 100)
+
+            # Attempt to infer creation timestamp
             created_at = None
             if hasattr(chunk, "created_at") and chunk.created_at:
                 created_at = chunk.created_at
             elif chunk.title and "created_at" in (chunk.title or ""):
                 created_at = chunk.title
 
+            # Human-readable saved timestamp
             saved_str = ""
             if created_at:
                 try:
+                    # Normalize ISO timestamp
                     dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                     created_at_str = dt.strftime("%Y-%m-%d %H:%M UTC")
                 except Exception:
+                    # Fallback if parsing fails
                     created_at_str = created_at
+
                 saved_str = f" [Saved: {created_at_str}]"
 
-            context_part = f"[From your saved content - {relevance_percent}% relevant]{saved_str}\n{chunk.text}"
+            # Final formatted context block
+            context_part = (
+                f"[From your saved content - {relevance_percent}% relevant]"
+                f"{saved_str}\n{chunk.text}"
+            )
             context_parts.append(context_part)
 
+        # Separator between chunks
         return "\n\n---\n\n".join(context_parts)
 
     async def _fetch_context(
@@ -101,28 +143,34 @@ Tone: Friendly, informative, conversational, intelligent"""
         limit: int = 5,
     ) -> List[ContextChunk]:
         """
-        Fetch relevant context chunks from Chroma
+        Retrieves relevant context chunks from Chroma vector DB.
+
+        Flow:
+        1. Generate embedding for user query
+        2. Load user-specific Chroma collection
+        3. Perform KNN semantic search
+        4. Return processed ContextChunk objects
 
         Args:
-            user_id: User ID for collection routing
-            query: Search query
-            content_id_filter: Optional content ID filter
-            limit: Max chunks to retrieve
-
-        Returns:
-            List of ContextChunk objects
+        - user_id: Used for multi-tenant collection routing
+        - query: Natural language user query
+        - content_id_filter: Optional filter to restrict to one document
+        - limit: Max number of chunks returned
         """
         try:
             print("  [FETCH_CONTEXT] Starting context retrieval...")
 
+            # Step 1: Generate query embedding
             print("  → Generating query embedding using sentence-transformers...")
             self.logger.info("[RAG_CHAT] Generating query embedding...")
             query_embedding = await self._generate_embedding(query)
+
             print(f"    ✅ Embedding generated: {len(query_embedding)} dimensions")
             self.logger.info(
                 f"[RAG_CHAT] ✅ Generated embedding ({len(query_embedding)} dimensions)"
             )
 
+            # Step 2: Get Chroma collection for this user
             print("  → Connecting to Chroma Cloud...")
             from app.connections import get_user_collection
 
@@ -130,6 +178,7 @@ Tone: Friendly, informative, conversational, intelligent"""
             print(f"    ✅ Collection retrieved: user_{user_id}_chunks")
             self.logger.info(f"[RAG_CHAT] ✅ Got collection: user_{user_id}_chunks")
 
+            # Step 3: Build semantic search query
             print("  → Building Knn search query...")
             from chromadb import Search, K, Knn
 
@@ -140,6 +189,7 @@ Tone: Friendly, informative, conversational, intelligent"""
                 .select(K.DOCUMENT, K.SCORE, "content_id")
             )
 
+            # Optional content-level filtering
             if content_id_filter:
                 search.where(K("content_id").eq(content_id_filter))
                 print(f"    ✅ Applied content_id filter: {content_id_filter}")
@@ -147,6 +197,7 @@ Tone: Friendly, informative, conversational, intelligent"""
                     f"[RAG_CHAT] Applied content_id filter: {content_id_filter}"
                 )
 
+            # Step 4: Execute search
             print("  → Executing semantic search in Chroma...")
             self.logger.info(
                 "[RAG_CHAT] Executing semantic search in chunks database..."
@@ -161,6 +212,7 @@ Tone: Friendly, informative, conversational, intelligent"""
             return search_results
 
         except Exception as e:
+            # Centralized error logging
             print(f"    ❌ Error: {str(e)}")
             self.logger.error(
                 f"[RAG_CHAT] Error in _fetch_context: {str(e)}", exc_info=True
@@ -169,24 +221,24 @@ Tone: Friendly, informative, conversational, intelligent"""
 
     async def _execute_search(self, collection, search):
         """
-        Execute Chroma search and process results
+        Executes a Chroma search query and converts results into ContextChunk objects.
 
-        Args:
-            collection: Chroma collection
-            search: Search query object
-
-        Returns:
-            List of ContextChunk objects
+        Handles:
+        - Multiple result formats (dict or object)
+        - Metadata extraction
+        - Defensive null checks
         """
         try:
             results = collection.search(search)
             chunks = []
 
+            # Chroma returns rows grouped per query
             if results.rows and results.rows()[0]:
                 rows = results.rows()[0]
                 self.logger.info(f"[RAG_CHAT] Processing {len(rows)} search results...")
 
                 for rank, row in enumerate(rows):
+                    # Support both dict-based and object-based result formats
                     if isinstance(row, dict):
                         metadata = row.get("metadata") or {}
                         score = row.get("score") or 0
@@ -196,12 +248,14 @@ Tone: Friendly, informative, conversational, intelligent"""
                         score = getattr(row, "score", 0) or 0
                         document_text = getattr(row, "document", "") or ""
 
+                    # Extract content ID
                     content_id = (
                         metadata.get("content_id", "")
                         if isinstance(metadata, dict)
                         else getattr(metadata, "content_id", "")
                     )
 
+                    # Extract creation timestamp
                     created_at = None
                     if isinstance(metadata, dict):
                         created_at = (
@@ -212,6 +266,7 @@ Tone: Friendly, informative, conversational, intelligent"""
                             getattr(metadata, "created_at", None) if metadata else None
                         )
 
+                    # Only add valid chunks
                     if content_id and document_text:
                         chunk = ContextChunk(
                             id=f"chunk_{rank}",
@@ -226,6 +281,7 @@ Tone: Friendly, informative, conversational, intelligent"""
                             created_at=created_at,
                         )
                         chunks.append(chunk)
+
                         self.logger.info(
                             f"[RAG_CHAT] Result {rank + 1}: "
                             f"content_id={content_id}, score={score:.4f}, created_at={created_at}"

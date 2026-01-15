@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from typing_extensions import Self
+from typing import Optional
 import re
 
 """
@@ -12,6 +13,7 @@ class SignUpRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     confirm_password: str = Field(..., alias="confirmPassword")
+    promo_code: Optional[str] = None
 
     @field_validator("name")
     @classmethod

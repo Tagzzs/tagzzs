@@ -10,22 +10,19 @@ Provides FastAPI endpoints for:
 
 import logging
 import time
+import uuid
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, status, Header
 
 from app.services.ai.react_agent import ReActAgent
+from app.services.credit_service import CreditService, CreditError
 
 logger = logging.getLogger(__name__)
 
 # Router instance
 router = APIRouter(prefix="/ai-agent", tags=["ai-agent"])
-
-# ============================================================================
-# AUTHENTICATION HELPER
-# ============================================================================
-
 
 def validate_user_authentication(
     x_user_id: Optional[str], request_user_id: Optional[str]
@@ -49,11 +46,6 @@ def validate_user_authentication(
 
     logger.info(f"✅ [AUTH] User authenticated: {user_id}")
     return user_id
-
-
-# ============================================================================
-# REQUEST/RESPONSE MODELS
-# ============================================================================
 
 
 class AgentQueryRequest(BaseModel):
@@ -183,11 +175,6 @@ class TaskListResponse(BaseModel):
     tools: List[TaskInfo] = Field(..., description="List of available tools")
 
 
-# ============================================================================
-# ENDPOINTS
-# ============================================================================
-
-
 @router.post(
     "/query",
     response_model=AgentQueryResponse,
@@ -210,6 +197,17 @@ async def query_agent(
 
     try:
         user_id = validate_user_authentication(x_user_id, request.user_id)
+
+        request_id = str(uuid.uuid4())
+        credit_ledger_metadata = {"reason": "KAI AI Chat",
+                                  "description": "AI Chat costing 1 credit per use",
+                                  "query_preview": request.query[:100]} # Can update later
+        await CreditService.deduct(
+            user_id=user_id,
+            feature="kai_ai",
+            request_id=request_id,
+            metadata=credit_ledger_metadata
+        )
 
         logger.info(f"🟡 [QUERY_AGENT] Starting ReAct agent for user: {user_id}")
         logger.info(f"� [QUERY_AGENT] Query: {request.query[:100]}...")
@@ -248,6 +246,10 @@ async def query_agent(
             error=None if response.status == "completed" else response.response_text,
         )
 
+    except CreditError:
+        raise HTTPException(
+            status_code=402, detail="Insufficient Credits"
+        )
     except ValueError as ve:
         execution_time = int((time.time() - start_time) * 1000)
         logger.error(f"🔴 [QUERY_AGENT] Validation error: {str(ve)}")
