@@ -103,15 +103,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // If refresh failed, proceed to sign out
-      console.log("Session invalid/expired. Clearing cookies...");
+
       await fetch(`${BACKEND_URL}/auth/sign-out`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
       setUser(null);
+      setUser(null);
     } catch (e) {
-      console.error("Refresh/Signout failed", e);
       setUser(null);
     }
   };
@@ -141,7 +141,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minutes
     const intervalId = setInterval(() => {
-      console.log("Auto-refreshing session...");
       refreshSession();
     }, REFRESH_INTERVAL);
 
@@ -159,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       router.push("/auth/sign-in");
     } catch (error) {
-      console.error("Sign out error:", error);
+      // ignore error
     } finally {
       setLoading(false);
     }
@@ -177,7 +176,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // If locked and lock is less than 10 seconds old, skip refresh
       if (isLocked && now - lockTime < 10000) {
-        console.log("Session refresh skipped (locked by another tab)");
         return;
       }
 

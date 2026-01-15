@@ -134,7 +134,7 @@ export default function KaiAIChat() {
         setHealthStatus(data);
       }
     } catch (error) {
-      console.error("Failed to check health:", error);
+      // ignore
     }
   };
 
@@ -281,12 +281,12 @@ export default function KaiAIChat() {
       );
 
       if (response.ok) {
-        console.log("[KAI_AI] ✅ Chat saved:", chatId);
+        // saved
       } else {
-        console.error("[KAI_AI] Failed to save chat:", await response.text());
+        // failed
       }
     } catch (err) {
-      console.error("[KAI_AI] Error saving chat:", err);
+      // failed
     }
   };
 
@@ -304,10 +304,10 @@ export default function KaiAIChat() {
       if (data.success) {
         setPastChats(data.chats || []);
       } else {
-        console.error("[KAI_AI] Failed to load chat history:", data.error);
+        // failed
       }
     } catch (err) {
-      console.error("[KAI_AI] Error loading chat history:", err);
+      // error
     } finally {
       setIsLoadingHistory(false);
     }
@@ -357,10 +357,10 @@ export default function KaiAIChat() {
         setMessages(display);
         setShowChatHistory(false);
       } else {
-        console.error("[KAI_AI] Failed to load chat:", data.error);
+        // failed
       }
     } catch (err) {
-      console.error("[KAI_AI] Error loading past chat:", err);
+      // error
     }
   };
 
@@ -379,12 +379,11 @@ export default function KaiAIChat() {
       );
       if (res.ok) {
         setPastChats((p) => p.filter((c) => c.chatId !== chatId));
-        console.log("[KAI_AI] Deleted chat", chatId);
       } else {
-        console.error("[KAI_AI] Failed to delete chat");
+        // failed
       }
     } catch (err) {
-      console.error("[KAI_AI] Error deleting chat:", err);
+      // error
     }
   };
 
@@ -482,7 +481,6 @@ export default function KaiAIChat() {
                   },
                 ]);
                 setShowChatHistory(false);
-                console.log("[KAI_AI] Started new chat", newId);
               }}
               className="gap-2 text-xs"
             >

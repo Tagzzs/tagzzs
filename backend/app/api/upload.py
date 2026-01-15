@@ -102,7 +102,6 @@ async def upload_file(
         )
 
     except Exception as e:
-        print(f"Upload error: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": "Internal server error", "details": str(e)},
@@ -183,7 +182,6 @@ async def upload_from_url(
         )
 
     except Exception as e:
-        print(f"Upload URL error: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": "Internal server error", "details": str(e)},

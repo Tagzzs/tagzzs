@@ -144,7 +144,7 @@ async def add_content(req: Request):
                         "chunk_count": emb_data.get("chunk_count", 0),
                     }
             except Exception as e:
-                print(f"Embedding failed: {e}")
+
 
         try:
             tag_color_map = {
