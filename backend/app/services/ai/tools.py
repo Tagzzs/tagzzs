@@ -48,7 +48,6 @@ class Tools:
             if not results:
                 return "No search results found."
 
-            # Format results as concise string (Title + Snippet only)
             formatted_results = []
             for r in results:
                 title = r.get("title", "")
@@ -112,6 +111,9 @@ class Tools:
                 except Exception as inner_e:
                     logger.error(f"[TOOLS] fetch_content error: {inner_e}")
                     return []
+                    
+
+
             content_details = await asyncio.to_thread(_fetch_content)
 
             if not content_details:

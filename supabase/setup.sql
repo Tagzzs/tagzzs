@@ -21,8 +21,7 @@ DROP TABLE IF EXISTS content_tags CASCADE;
 DROP TABLE IF EXISTS content CASCADE;
 DROP TABLE IF EXISTS tag_stats CASCADE;
 DROP TABLE IF EXISTS tags CASCADE;
--- Uncomment the next line ONLY if you want to wipe all user profile data:
--- DROP TABLE IF EXISTS users CASCADE; 
+
 
 DROP VIEW IF EXISTS tags_tree;
 DROP FUNCTION IF EXISTS update_tag_stats_trigger CASCADE;
@@ -59,7 +58,6 @@ $$ LANGUAGE plpgsql;
 -- =============================================================================
 -- 2. USER MANAGEMENT
 -- =============================================================================
-
 CREATE TABLE IF NOT EXISTS users (
     userid UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -81,6 +79,7 @@ CREATE TRIGGER update_users_updated_at
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
 
+
 -- RLS: Users
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
@@ -93,20 +92,6 @@ CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid
 DROP POLICY IF EXISTS "Allow insert during signup" ON users;
 CREATE POLICY "Allow insert during signup" ON users FOR INSERT WITH CHECK (auth.uid() = userid);
 
--- AUTOMATION: Create Public Profile on Signup
-CREATE OR REPLACE FUNCTION public.handle_new_user() 
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO public.users (userid, name, email, created_at)
-    VALUES (
-        NEW.id, 
-        COALESCE(NEW.raw_user_meta_data->>'name', 'New User'),
-        NEW.email,
-        NOW()
-    );
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -767,3 +752,240 @@ ALTER TABLE content_embeddings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Owner Only" ON content_embeddings 
 FOR ALL TO authenticated 
 USING (auth.uid() = userid) WITH CHECK (auth.uid() = userid);
+
+
+-- CREDIT MANAGEMENT
+
+DROP TYPE IF EXISTS credit_feature CASCADE;
+CREATE TYPE credit_feature AS ENUM (
+    'capture',
+    'graph',
+    'database',
+    'kai_ai',
+    'youtube_extract',
+    'topup',
+    'promo_code',
+    'daily_reward'
+);
+
+ALTER TABLE users
+ADD COLUMN 
+credits_balance INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_users_credits_balance ON users(credits_balance);
+
+CREATE TABLE credit_ledger (
+    creditid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    delta INTEGER NOT NULL,
+    feature credit_feature NOT NULL,
+    request_id UUID NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE credit_ledger ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY credit_ledger_owner
+ON credit_ledger
+FOR SELECT
+TO authenticated
+USING (auth.uid() = userid);
+
+CREATE POLICY credit_ledger_insert
+ON credit_ledger
+FOR INSERT
+TO service_role
+WITH CHECK (userid IS NOT NULL AND delta < 0);
+
+GRANT INSERT ON credit_ledger TO service_role;
+GRANT SELECT ON credit_ledger TO authenticated;
+
+CREATE UNIQUE INDEX uq_credit_ledger_request ON credit_ledger(userid, request_id);
+CREATE INDEX idx_credit_ledger_user_time ON credit_ledger(userid, created_at DESC);
+
+CREATE TABLE credit_pricing (
+    feature credit_feature PRIMARY KEY,
+    cost INTEGER NOT NULL CHECK (cost > 0)
+);
+ALTER TABLE credit_pricing ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can view pricing"
+ON credit_pricing;
+CREATE POLICY "Authenticated users can view pricing" 
+ON credit_pricing FOR SELECT 
+TO authenticated 
+USING (true);
+
+INSERT INTO credit_pricing (feature, cost) VALUES
+('capture', 5),
+('kai_ai', 1),
+('youtube_extract', 10)
+ON CONFLICT (feature) DO UPDATE
+SET cost = EXCLUDED.cost;
+
+
+CREATE OR REPLACE FUNCTION update_user_credits(
+    p_userid UUID,
+    p_feature credit_feature,
+    p_request_id UUID,
+    p_metadata JSONB DEFAULT '{}'::jsonb
+)
+RETURNS VOID AS $$
+DECLARE
+    v_cost INTEGER;
+    v_current_balance INTEGER;
+BEGIN
+    SELECT cost INTO v_cost
+    FROM credit_pricing
+    WHERE feature = p_feature;
+
+    IF v_cost IS NULL THEN
+        RAISE EXCEPTION 'Invalid credit feature';
+    END IF;
+
+    SELECT credits_balance INTO v_current_balance
+    FROM users
+    WHERE userid = p_userid
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'User not found';
+    END IF;
+
+    IF v_current_balance < 0 THEN
+        RAISE EXCEPTION 'Insufficient credits';
+    END IF;
+
+    UPDATE users
+    SET credits_balance = credits_balance - v_cost
+    WHERE userid = p_userid;
+    
+    INSERT INTO credit_ledger (userid, delta, feature, request_id, metadata)
+    VALUES (p_userid, -v_cost, p_feature, p_request_id, p_metadata);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE ALL ON FUNCTION update_user_credits FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION update_user_credits TO service_role;
+
+-- AUTOMATION: Create Public Profile on Signup
+CREATE OR REPLACE FUNCTION public.handle_new_user() 
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.users (userid, name, email, credits_balance, created_at)
+VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'name', 'New User'),
+    NEW.email,
+    50,
+    NOW()
+);
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TABLE promo_codes (
+    code TEXT PRIMARY KEY,
+    credit_amount INTEGER NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE promo_code_usage (
+    userid UUID REFERENCES users(userid),
+    code TEXT REFERENCES promo_codes(code),
+    used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (userid, code)
+);
+
+ALTER TABLE promo_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE promo_code_usage ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view specific promo code" ON promo_codes
+    FOR SELECT
+    USING (is_active = TRUE);
+
+CREATE POLICY "Admins have full access to promo_codes" ON promo_codes
+    FOR ALL
+    TO authenticated
+    USING (auth.jwt() ->> 'role' = 'service_role');
+
+CREATE POLICY "Users can view own usage" ON promo_code_usage
+    FOR SELECT
+    USING (auth.uid() = userid);
+
+CREATE POLICY "Service role only insert usage" ON promo_code_usage
+    FOR INSERT
+    WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
+
+
+CREATE OR REPLACE FUNCTION apply_promo(
+    p_userid UUID,
+    p_code TEXT
+)
+RETURNS VOID AS $$
+DECLARE
+    v_credit_amount INTEGER;
+BEGIN
+    SELECT credit_amount INTO v_credit_amount
+    FROM promo_codes
+    WHERE code = p_code 
+      AND is_active = TRUE 
+      AND (expires_at IS NULL OR expires_at > NOW());
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Invalid or expired promo code';
+    END IF;
+
+    -- Ensure if promo code already not used
+    IF EXISTS (SELECT 1 FROM promo_code_usage WHERE userid = p_userid AND code = p_code) THEN
+        RAISE EXCEPTION 'Promo code already used';
+    END IF;
+
+    -- Record the usage
+    INSERT INTO promo_code_usage (userid, code) VALUES (p_userid, p_code);
+
+    UPDATE users 
+    SET credits_balance = credits_balance + v_credit_amount
+    WHERE userid = p_userid;
+
+    -- Log to ledger
+    INSERT INTO credit_ledger (userid, delta, feature, request_id, metadata)
+    VALUES (
+        p_userid, 
+        v_credit_amount, 
+        'promo_code', 
+        gen_random_uuid(),
+        jsonb_build_object(
+            'reason', 'Promo Code',
+            'promo_code', p_code
+        )
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+CREATE OR REPLACE FUNCTION distribute_daily_credits()
+RETURNS VOID AS $$
+BEGIN
+    UPDATE public.users
+    SET credits_balance = credits_balance + 15;
+
+    INSERT INTO public.credit_ledger (userid, delta, feature, request_id, metadata)
+    SELECT 
+        userid, 
+        15, 
+        'daily_reward', 
+        gen_random_uuid(), 
+        jsonb_build_object('reason', 'Daily Reward', 'time_utc', '00:00')
+    FROM public.users;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+SELECT cron.schedule(
+    'daily-credit-reward',
+    '0 0 * * *',
+    'SELECT distribute_daily_credits();'
+)
