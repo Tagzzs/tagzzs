@@ -20,6 +20,7 @@ export interface ExtractedContent {
     summary?: string;
     tags?: string[];
     rawContent?: string;
+    extracted_text?: string;
   };
   error?: string;
 }

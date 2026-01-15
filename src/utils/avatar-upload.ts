@@ -138,7 +138,7 @@ export async function uploadAvatar(
       };
     }
 
-    console.log(`[AVATAR_UPLOAD] Compressing image for user ${userId}`);
+
     const compressedFile = await compressImage(
       file,
       opts.maxDimensions,
@@ -185,7 +185,7 @@ export async function uploadAvatar(
        };
     }
 
-    console.log(`[AVATAR_UPLOAD] Successfully uploaded: ${publicUrl}`);
+
 
     return {
       success: true,
@@ -193,7 +193,6 @@ export async function uploadAvatar(
       fileName: data.fileName,
     };
   } catch (error) {
-    console.log(`[AVATAR_UPLOAD] Unexpected error: ${error}`);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unexpected upload error",

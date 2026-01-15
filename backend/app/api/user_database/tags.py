@@ -90,17 +90,17 @@ async def add_tag(
             "tag_name": tag_payload.tagName,
             "slug": tag_slug,
             "color_code": tag_payload.colorCode,
-            "description": tag_payload.description or ""
+            "description": tag_payload.description or "",
         }
 
         tag_result = supabase.table("tags").insert(tag_data).execute()
-        
+
         if not tag_result.data:
             raise Exception("Failed to insert tag")
 
         new_tag = tag_result.data[0]
         tag_id = new_tag["tagid"]
-        
+
         return JSONResponse(
             status_code=201,
             content={
@@ -118,7 +118,6 @@ async def add_tag(
         )
 
     except Exception as e:
-        print(f"Server Error: {str(e)}")
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
@@ -132,30 +131,40 @@ async def delete_tags(
 
         user_id = user.get("id")
         tag_id = payload.tagId
-        
+
         if tag_id:
             # Check if tag exists and belongs to user
-            check_res = supabase.table("tags").select("tagid").eq("tagid", tag_id).eq("userid", user_id).execute()
+            check_res = (
+                supabase.table("tags")
+                .select("tagid")
+                .eq("tagid", tag_id)
+                .eq("userid", user_id)
+                .execute()
+            )
             if not check_res.data:
                 return JSONResponse(status_code=404, content={"error": "Tag not found"})
 
-            delete_res = supabase.table("tags").delete().eq("tagid", tag_id).eq("userid", user_id).execute()
-            
-            return JSONResponse(
-                status_code=200, 
-                content={"success": True, "tagId": tag_id}
+            delete_res = (
+                supabase.table("tags")
+                .delete()
+                .eq("tagid", tag_id)
+                .eq("userid", user_id)
+                .execute()
             )
-        
+
+            return JSONResponse(
+                status_code=200, content={"success": True, "tagId": tag_id}
+            )
+
         # Handle Bulk Delete
         else:
             # This will trigger cascades for all user's content_tags and tag_stats
             bulk_res = supabase.table("tags").delete().eq("userid", user_id).execute()
-            
+
             count = len(bulk_res.data) if bulk_res.data else 0
-            
+
             return JSONResponse(
-                status_code=200, 
-                content={"success": True, "count": count}
+                status_code=200, content={"success": True, "count": count}
             )
 
     except Exception as e:
@@ -185,7 +194,9 @@ async def update_tag(
             update_data["description"] = payload.description
 
         if not update_data:
-            return JSONResponse(status_code=400, content={"error": "No fields provided for update"})
+            return JSONResponse(
+                status_code=400, content={"error": "No fields provided for update"}
+            )
 
         # Execute update in Supabase
         result = (
@@ -197,7 +208,9 @@ async def update_tag(
         )
 
         if not result.data:
-            return JSONResponse(status_code=404, content={"error": "Tag not found or unauthorized"})
+            return JSONResponse(
+                status_code=404, content={"error": "Tag not found or unauthorized"}
+            )
 
         updated_tag = result.data[0]
 
@@ -243,36 +256,60 @@ async def get_user_tags(
         user_id = user.get("id")
         tag_name = payload.tagName
 
-        query = supabase.table("tags").select("*, tag_stats(usage_count)").eq("userid", user_id)
+        query = (
+            supabase.table("tags")
+            .select("*, tag_stats(usage_count)")
+            .eq("userid", user_id)
+        )
 
         if tag_name and isinstance(tag_name, str):
             tag_slug = generate_tag_slug(tag_name)
             result = query.eq("slug", tag_slug).execute()
 
             if not tag_slug:
-                return JSONResponse(status_code=200, content={"success": True, "found": False, "message": "Invalid tag name"})
-                        
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "success": True,
+                        "found": False,
+                        "message": "Invalid tag name",
+                    },
+                )
+
             if not result.data:
-                return JSONResponse(status_code=200, content={"success": True, "found": False, "message": "Tag not found"})
-            
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "success": True,
+                        "found": False,
+                        "message": "Tag not found",
+                    },
+                )
+
             tag = result.data[0]
             stats = tag.get("tag_stats", {})
-            usage = stats[0].get("usage_count", 0) if isinstance(stats, list) and stats else stats.get("usage_count", 0)
+            usage = (
+                stats[0].get("usage_count", 0)
+                if isinstance(stats, list) and stats
+                else stats.get("usage_count", 0)
+            )
 
-            return JSONResponse(content={
-                "success": True,
-                "found": True,
-                "data": {
-                    "id": tag["tagid"],
-                    "tagName": tag["tag_name"],
-                    "tagColor": tag["color_code"],
-                    "description": tag["description"],
-                    "contentCount": usage,
-                    "parentId": tag.get("parent_id"),
-                    "createdAt": tag["created_at"],
-                    "updatedAt": tag["updated_at"],
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "found": True,
+                    "data": {
+                        "id": tag["tagid"],
+                        "tagName": tag["tag_name"],
+                        "tagColor": tag["color_code"],
+                        "description": tag["description"],
+                        "contentCount": usage,
+                        "parentId": tag.get("parent_id"),
+                        "createdAt": tag["created_at"],
+                        "updatedAt": tag["updated_at"],
+                    },
                 }
-            })
+            )
 
         result = query.order("created_at", desc=True).execute()
         all_tags = []
@@ -284,18 +321,22 @@ async def get_user_tags(
             else:
                 usage = stats.get("usage_count", 0) if stats else 0
 
-            all_tags.append({
-                "id": tag["tagid"],
-                "tagName": tag["tag_name"],
-                "tagColor": tag["color_code"],
-                "description": tag["description"],
-                "contentCount": usage,
-                "parentId": tag.get("parent_id"),
-                "createdAt": tag["created_at"],
-                "updatedAt": tag["updated_at"],
-            })
+            all_tags.append(
+                {
+                    "id": tag["tagid"],
+                    "tagName": tag["tag_name"],
+                    "tagColor": tag["color_code"],
+                    "description": tag["description"],
+                    "contentCount": usage,
+                    "parentId": tag.get("parent_id"),
+                    "createdAt": tag["created_at"],
+                    "updatedAt": tag["updated_at"],
+                }
+            )
 
-        return JSONResponse(content={"success": True, "data": all_tags, "count": len(all_tags)})
+        return JSONResponse(
+            content={"success": True, "data": all_tags, "count": len(all_tags)}
+        )
 
     except Exception as e:
         print(f"Server Error: {str(e)}")

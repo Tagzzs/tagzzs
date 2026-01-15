@@ -43,12 +43,10 @@ export function useAuthenticatedApi() {
         if (response.status === 401 && retryCount < 1) {
           // Attempt to refresh session
           try {
-            console.log('Access token expired, attempting refesh...');
             await refreshSession();
             // Cookies should be updated now, retry request
             return await callApi(endpoint, options, retryCount + 1);
           } catch (refreshError) {
-            console.error('Session refresh failed:', refreshError);
             // Fall through to error handling
           }
         }
@@ -69,7 +67,6 @@ export function useAuthenticatedApi() {
 
       return await response.json()
     } catch (error) {
-      console.error('API call failed:', error)
       
       if (!(error instanceof Error && error.message.includes('Authentication'))) {
         toast({

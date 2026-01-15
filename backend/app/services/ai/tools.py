@@ -108,43 +108,7 @@ class Tools:
                 try:
                     supabase = create_client(supabase_url, supabase_key)
                     
-                    # DEBUG: Deep inspection of why the main query fails
-                    print(f"[TOOLS] 🕵️ DEBUG: Inspecting Content IDs: {content_ids}")
-                    print(f"[TOOLS] 🕵️ DEBUG: Filtering for User ID: {user_id}")
-                    
-                    # 1. Check raw existence (ID only)
-                    raw_check = supabase.table("content").select("contentid, userid, is_deleted").in_("contentid", content_ids).execute()
-                    found_items = raw_check.data if raw_check.data else []
-                    
-                    if not found_items:
-                        print(f"[TOOLS] ❌ DEBUG: None of these IDs exist in the database table 'content'.")
-                    else:
-                        print(f"[TOOLS] ✅ DEBUG: Found {len(found_items)} items. Analyzing mismatches:")
-                        for item in found_items:
-                            c_id = item.get('contentid')
-                            u_id = item.get('userid')
-                            is_del = item.get('is_deleted')
-                            
-                            u_match = str(u_id) == str(user_id)
-                            del_match = is_del is False
-                            
-                            status = "✅ MATCH" if (u_match and del_match) else "❌ BLOCKED"
-                            print(f"   - {c_id}: User={u_id} (Match={u_match}), Deleted={is_del} -> {status}")
 
-                    # Main query (restoring original logic)
-                    response = (
-                        supabase.table("content")
-                        .select("*, content_tags(tags(tag_name))")
-                        .in_("contentid", content_ids)
-                        .eq("userid", user_id)
-                        .eq("is_deleted", False)
-                        .execute()
-                    )
-                    return response.data
-                except Exception as e:
-                    logger.error(f"[TOOLS] Supabase fetch error: {str(e)}")
-                    print(f"[TOOLS] ❌ Supabase Error: {str(e)}")
-                    return []
 
             content_details = await asyncio.to_thread(_fetch_content)
 

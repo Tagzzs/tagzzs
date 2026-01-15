@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import Link from "next/link";
 import { signUpSchema } from "@/lib/validation/authSchemas";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ export default function SignUpPage() {
 
   const router = useRouter();
   const { toast } = useToast();
+  const { checkAuth } = useAuth();
 
   // Real-time email validation
   useEffect(() => {
@@ -106,7 +108,7 @@ export default function SignUpPage() {
     // Redirect to backend endpoint which handles the OAuth flow
     window.location.href = `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/login/google`;
   };
-  
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -171,7 +173,13 @@ export default function SignUpPage() {
           variant: "default",
         });
 
+        // 1. Refresh global auth state so AuthGuard knows we are logged in
+        await checkAuth();
+
+        // 2. Refresh server components
         router.refresh();
+
+        // 3. Navigate
         router.push("/dashboard");
       } else {
         // TODO: Set email confirmation first
