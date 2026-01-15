@@ -763,7 +763,8 @@ CREATE TYPE credit_feature AS ENUM (
     'database',
     'kai_ai',
     'youtube_extract',
-    'topup'
+    'topup',
+    'promo_code'
 );
 
 ALTER TABLE users
@@ -833,6 +834,7 @@ CREATE OR REPLACE FUNCTION update_user_credits(
 RETURNS VOID AS $$
 DECLARE
     v_cost INTEGER;
+    v_current_balance INTEGER;
 BEGIN
     SELECT cost INTO v_cost
     FROM credit_pricing
@@ -842,15 +844,23 @@ BEGIN
         RAISE EXCEPTION 'Invalid credit feature';
     END IF;
 
-    UPDATE users
-    SET credits_balance = credits_balance - v_cost
+    SELECT credits_balance INTO v_current_balance
+    FROM users
     WHERE userid = p_userid
-      AND credits_balance >= v_cost;
+    FOR UPDATE;
 
     IF NOT FOUND THEN
+        RAISE EXCEPTION 'User not found';
+    END IF;
+
+    IF v_current_balance < 0 THEN
         RAISE EXCEPTION 'Insufficient credits';
     END IF;
 
+    UPDATE users
+    SET credits_balance = credits_balance - v_cost
+    WHERE userid = p_userid;
+    
     INSERT INTO credit_ledger (userid, delta, feature, request_id, metadata)
     VALUES (p_userid, -v_cost, p_feature, p_request_id, p_metadata);
 END;
@@ -873,5 +883,85 @@ VALUES (
 );
 
     RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TABLE promo_codes (
+    code TEXT PRIMARY KEY,
+    credit_amount INTEGER NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE promo_code_usage (
+    userid UUID REFERENCES users(userid),
+    code TEXT REFERENCES promo_codes(code),
+    used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (userid, code)
+);
+
+ALTER TABLE promo_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE promo_code_usage ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view specific promo code" ON promo_codes
+    FOR SELECT
+    USING (is_active = TRUE);
+
+CREATE POLICY "Admins have full access to promo_codes" ON promo_codes
+    FOR ALL
+    TO authenticated
+    USING (auth.jwt() ->> 'role' = 'service_role');
+
+CREATE POLICY "Users can view own usage" ON promo_code_usage
+    FOR SELECT
+    USING (auth.uid() = userid);
+
+CREATE POLICY "Service role only insert usage" ON promo_code_usage
+    FOR INSERT
+    WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
+
+
+CREATE OR REPLACE FUNCTION apply_promo(
+    p_userid UUID,
+    p_code TEXT
+)
+RETURNS VOID AS $$
+DECLARE
+    v_credit_amount INTEGER;
+BEGIN
+    SELECT credit_amount INTO v_credit_amount
+    FROM promo_codes
+    WHERE code = p_code 
+      AND is_active = TRUE 
+      AND (expires_at IS NULL OR expires_at > NOW());
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Invalid or expired promo code';
+    END IF;
+
+    -- Ensure if promo code already not used
+    IF EXISTS (SELECT 1 FROM promo_code_usage WHERE userid = p_userid AND code = p_code) THEN
+        RAISE EXCEPTION 'Promo code already used';
+    END IF;
+
+    -- Record the usage
+    INSERT INTO promo_code_usage (userid, code) VALUES (p_userid, p_code);
+
+    UPDATE users 
+    SET credits_balance = credits_balance + v_credit_amount
+    WHERE userid = p_userid;
+
+    -- Log to ledger
+    INSERT INTO credit_ledger (userid, delta, feature, request_id, metadata)
+    VALUES (
+        p_userid, 
+        v_credit_amount, 
+        'promo_code', 
+        gen_random_uuid(),
+        sonb_build_object(
+            'reason', 'Promo Code',
+            'promo_code', p_code
+        )
+    );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
