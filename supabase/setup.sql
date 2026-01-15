@@ -21,6 +21,8 @@ DROP TABLE IF EXISTS content_tags CASCADE;
 DROP TABLE IF EXISTS content CASCADE;
 DROP TABLE IF EXISTS tag_stats CASCADE;
 DROP TABLE IF EXISTS tags CASCADE;
+DROP TYPE IF EXISTS credit_feature CASCADE;
+
 -- Uncomment the next line ONLY if you want to wipe all user profile data:
 -- DROP TABLE IF EXISTS users CASCADE; 
 
@@ -59,6 +61,13 @@ $$ LANGUAGE plpgsql;
 -- =============================================================================
 -- 2. USER MANAGEMENT
 -- =============================================================================
+CREATE TYPE credit_feature AS ENUM (
+    'capture',
+    'graph',
+    'database',
+    'kai_ai',
+    'youtube_extract'
+);
 
 CREATE TABLE IF NOT EXISTS users (
     userid UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -70,6 +79,96 @@ CREATE TABLE IF NOT EXISTS users (
     PRIMARY KEY (userid)
 );
 
+ALTER TABLE users
+ADD COLUMN credits_balance INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE credit_ledger (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+    delta INTEGER NOT NULL,
+    feature credit_feature NOT NULL,
+    request_id UUID NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE credit_ledger ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY credit_ledger_owner
+ON credit_ledger
+FOR SELECT
+TO authenticated
+USING (auth.uid() = userid);
+
+CREATE POLICY credit_ledger_insert
+ON credit_ledger
+FOR INSERT
+TO service_role
+WITH CHECK (userid IS NOT NULL AND delta < 0);
+
+
+GRANT INSERT ON credit_ledger TO service_role;
+GRANT SELECT ON credit_ledger TO authenticated;
+
+
+
+CREATE UNIQUE INDEX uq_credit_ledger_request
+ON credit_ledger(userid, request_id);
+
+CREATE INDEX idx_credit_ledger_user_time
+ON credit_ledger(userid, created_at DESC);
+
+
+CREATE TABLE credit_pricing (
+    feature credit_feature PRIMARY KEY,
+    cost INTEGER NOT NULL CHECK (cost > 0)
+);
+
+INSERT INTO credit_pricing (feature, cost) VALUES
+('capture', 5),
+('graph', 10),
+('database', 3),
+('kai_ai', 15),
+('youtube_extract', 20)
+ON CONFLICT (feature) DO UPDATE
+SET cost = EXCLUDED.cost;
+
+
+CREATE OR REPLACE FUNCTION update_user_credits(
+    p_userid UUID,
+    p_feature credit_feature,
+    p_request_id UUID,
+    p_metadata JSONB DEFAULT '{}'::jsonb
+)
+RETURNS VOID AS $$
+DECLARE
+    v_cost INTEGER;
+BEGIN
+    SELECT cost INTO v_cost
+    FROM credit_pricing
+    WHERE feature = p_feature;
+
+    IF v_cost IS NULL THEN
+        RAISE EXCEPTION 'Invalid credit feature';
+    END IF;
+
+    UPDATE users
+    SET credits_balance = credits_balance - v_cost
+    WHERE userid = p_userid
+      AND credits_balance >= v_cost;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Insufficient credits';
+    END IF;
+
+    INSERT INTO credit_ledger (userid, delta, feature, request_id, metadata)
+    VALUES (p_userid, -v_cost, p_feature, p_request_id, p_metadata);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE ALL ON FUNCTION update_user_credits FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION update_user_credits TO service_role;
+
+
 -- Trigger: Maintain updated_at on users
 DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at 
@@ -80,6 +179,9 @@ CREATE TRIGGER update_users_updated_at
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
+CREATE INDEX IF NOT EXISTS idx_users_credits_balance
+ON users(credits_balance);
+
 
 -- RLS: Users
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -97,13 +199,15 @@ CREATE POLICY "Allow insert during signup" ON users FOR INSERT WITH CHECK (auth.
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO public.users (userid, name, email, created_at)
-    VALUES (
-        NEW.id, 
-        COALESCE(NEW.raw_user_meta_data->>'name', 'New User'),
-        NEW.email,
-        NOW()
-    );
+    INSERT INTO public.users (userid, name, email, credits_balance, created_at)
+VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'name', 'New User'),
+    NEW.email,
+    200,
+    NOW()
+);
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
