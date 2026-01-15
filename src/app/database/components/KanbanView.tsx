@@ -44,13 +44,13 @@ function KanbanView({
     return (
         <div
             ref={containerRef}
-            className="flex h-full gap-6 overflow-x-auto px-10 pb-32 items-start db-scroll snap-x"
+            className="flex h-full gap-4 md:gap-6 overflow-x-auto px-4 md:px-10 pb-32 items-start db-scroll snap-x"
             onWheel={handleWheel}
         >
             {treeData.map(cat => {
                 const isCatExpanded = kanbanExpandedCats.has(cat.name);
                 return (
-                    <div key={cat.name} className="min-w-[320px] w-[320px] shrink-0 flex flex-col h-full max-h-full bg-zinc-900/20 border border-zinc-800/50 rounded-xl snap-start">
+                    <div key={cat.name} className="min-w-[85vw] sm:min-w-[280px] md:min-w-[320px] w-[85vw] sm:w-[280px] md:w-[320px] shrink-0 flex flex-col h-full max-h-full bg-zinc-900/20 border border-zinc-800/50 rounded-xl snap-start">
                         <div className="p-4 border-b border-zinc-800/50 flex justify-between items-center bg-zinc-900/80 rounded-t-xl sticky top-0 backdrop-blur-sm z-10 select-none">
                             <div onClick={() => onUpdateView(cat.name)} className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
                                 <div className="dot-base dot-grey shrink-0"></div>

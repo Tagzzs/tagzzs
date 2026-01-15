@@ -58,6 +58,15 @@ export function buildTreeData(
   tagTree.forEach((parentTag) => {
     const children: TreeSubNode[] = [];
 
+    // Check if parent tag name is UUID and resolve
+    let parentName = parentTag.tagName;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
+    if (uuidRegex.test(parentName)) {
+        const resolved = tagsMap.get(parentName);
+        if (resolved) parentName = resolved.tagName;
+    }
+
     // Check if parent tag has direct content
     const parentContent = tagContentMap.get(parentTag.id) || [];
 
@@ -65,8 +74,15 @@ export function buildTreeData(
     if (parentTag.children && parentTag.children.length > 0) {
       parentTag.children.forEach((childTag) => {
         const childContent = tagContentMap.get(childTag.id) || [];
+        
+        let childName = childTag.tagName;
+        if (uuidRegex.test(childName)) {
+             const resolved = tagsMap.get(childName);
+             if (resolved) childName = resolved.tagName;
+        }
+
         children.push({
-          name: childTag.tagName,
+          name: childName,
           tagId: childTag.id,
           tagColor: childTag.tagColor,
           items: childContent,
@@ -97,7 +113,7 @@ export function buildTreeData(
     // Only add to result if there are children with content
     if (children.length > 0) {
       result.push({
-        name: parentTag.tagName,
+        name: parentName,
         tagId: parentTag.id,
         tagColor: parentTag.tagColor,
         children,

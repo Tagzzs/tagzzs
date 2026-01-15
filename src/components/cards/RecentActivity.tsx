@@ -33,19 +33,19 @@ export default function RecentActivity({
     return (
         <div className="glass-panel bg-[#050505] p-5 mt-7 flex flex-col flex-1">
             <div className="flex justify-between items-center mb-5">
-                <h3 className="text-[14px] font-bold text-zinc-500 uppercase tracking-widest">
+                <h3 className="text-sm md:text-base font-bold text-zinc-500 uppercase tracking-widest">
                     <span className="text-gradient">{title}</span>
                 </h3>
                 <div
                     onClick={onResetFilter}
-                    className={`text-[14px] bg-white/5 px-2.5 py-0.5 rounded-full border border-white/5 cursor-pointer hover:bg-white/10 transition-colors ${filterLabel === 'Filter: All' ? 'text-zinc-500' : 'text-white'
+                    className={`text-xs md:text-sm bg-white/5 px-2.5 py-0.5 rounded-full border border-white/5 cursor-pointer hover:bg-white/10 transition-colors ${filterLabel === 'Filter: All' ? 'text-zinc-500' : 'text-white'
                         }`}
                 >
                     {filterLabel}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 mt-4 md:grid-cols-2 xl:grid-cols-3 gap-6 flex-1">
+            <div className="grid grid-cols-1 mt-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-6 flex-1">
                 {loading ? (
                     // Loading skeleton
                     <>

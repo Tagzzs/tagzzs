@@ -244,7 +244,7 @@ export default function Dashboard() {
     }, [isSearching, searchQuery, filterLabel]);
 
     return (
-        <div className="flex h-screen w-full selection:bg-[#9F55FF]/30 relative bg-[#0a0a0a] overflow-hidden">
+        <div className="flex h-dvh w-full selection:bg-[#9F55FF]/30 relative bg-[#0a0a0a] overflow-hidden">
             {/* Modals */}
             <ItemModal
                 isOpen={itemModalOpen}
@@ -270,12 +270,12 @@ export default function Dashboard() {
             />
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col overflow-hidden bg-black lg:rounded-l-3xl border border-white/5 border-r-0 lg:my-2 lg:ml-0 shadow-2xl relative">
+            <div className="flex-1 flex flex-col overflow-hidden bg-black xl:rounded-l-3xl border border-white/5 border-r-0 xl:my-2 xl:ml-0 shadow-2xl relative">
                 {/* Single Scroll Container */}
                 <div className="flex-1 flex flex-col overflow-y-auto relative z-10 scrollbar-thumb-zinc-700 scrollbar-track-transparent">
                     <Header onResetFilter={resetFilter} />
 
-                    <div className="flex flex-1 flex-col lg:flex-row relative">
+                    <div className="flex flex-1 flex-col xl:flex-row relative">
                         {/* Main Column */}
                         <main className="flex-1 flex flex-col h-fit">
                             <SearchBar 
@@ -344,7 +344,7 @@ export default function Dashboard() {
 
                                 {/* Mobile Calendar & Productivity */}
                                 {!isSearching && (
-                                    <div className="flex lg:hidden flex-col gap-6">
+                                    <div className="flex xl:hidden flex-col gap-6">
                                         <Calendar
                                             view={calendarView}
                                             selectedYear={selectedYear}
@@ -363,7 +363,7 @@ export default function Dashboard() {
                         </main>
 
                         {/* Right Sidebar (Desktop) - Sticky */}
-                        <aside className="hidden lg:flex w-[420px] xl:w-[480px] shrink-0 flex-col gap-6 p-6 pl-0 sticky top-0 h-fit z-20">
+                        <aside className="hidden xl:flex w-[420px] 2xl:w-[480px] shrink-0 flex-col gap-6 p-6 pl-0 sticky top-0 h-fit z-20">
                             <Calendar
                                 view={calendarView}
                                 selectedYear={selectedYear}

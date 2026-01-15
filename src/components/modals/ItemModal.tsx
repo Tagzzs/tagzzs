@@ -1,7 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { X, ArrowSquareOut } from '@phosphor-icons/react';
+import Link from 'next/link';
+import { X, ArrowSquareOut, ArrowRight } from '@phosphor-icons/react';
 import { ContentItem } from '@/types';
 import { Tag } from '@/hooks/useTags';
 
@@ -125,6 +126,17 @@ export default function ItemModal({ isOpen, content, tags = [], onClose }: ItemM
                             </div>
                         </>
                     )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-6 border-t border-white/10 flex justify-end bg-[#09090b]">
+                    <Link
+                        href={`/content/${content.id}`}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-black text-sm font-bold hover:bg-zinc-200 transition-colors shadow-lg shadow-white/5"
+                    >
+                        Open Page
+                        <ArrowRight size={16} weight="bold" />
+                    </Link>
                 </div>
             </div>
         </div>

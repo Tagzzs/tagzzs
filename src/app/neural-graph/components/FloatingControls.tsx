@@ -34,7 +34,7 @@ export default function FloatingControls({
             </div>
             <button 
                 onClick={onOpenAddModal}
-                className="add-btn h-12 px-6 bg-white hover:bg-zinc-200 text-black rounded-full font-bold text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.15)] transition shrink-0"
+                className="add-btn h-12 px-6 bg-white hover:bg-zinc-200 text-black rounded-full font-bold text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.15)] transition shrink-0 cursor-pointer"
             >
                 <Plus weight="bold" className="text-lg" />
                 <span className="hidden sm:inline">Add</span>

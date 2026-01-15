@@ -20,6 +20,8 @@ interface FloatingSearchBarProps {
     searchMode: 'DB' | 'AI';
     onSetSearchMode: (mode: 'DB' | 'AI') => void;
     onOpenAddModal: () => void;
+    isAiSidebarOpen?: boolean;
+    setAiSidebarOpen?: (open: boolean) => void;
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
@@ -29,7 +31,9 @@ export default function FloatingSearchBar({
     currentDetailItem,
     searchMode,
     onSetSearchMode,
-    onOpenAddModal
+    onOpenAddModal,
+    isAiSidebarOpen,
+    setAiSidebarOpen
 }: FloatingSearchBarProps) {
     const router = useRouter();
     const { user } = useAuth();
@@ -46,7 +50,11 @@ export default function FloatingSearchBar({
         if (searchMode === 'AI') {
             // Open Kai-AI sidebar with the query and send it
             setShowResults(false);
-            setShowKaiAI(true);
+            if (setAiSidebarOpen) {
+                setAiSidebarOpen(true);
+            } else {
+                setShowKaiAI(true);
+            }
             const q = query;
             setQuery('');
             await sendMessage(q);
@@ -82,7 +90,7 @@ export default function FloatingSearchBar({
         } finally {
             setIsSearching(false);
         }
-    }, [query, searchMode, user?.id, sendMessage]);
+    }, [query, searchMode, user?.id, sendMessage, setAiSidebarOpen]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -108,7 +116,7 @@ export default function FloatingSearchBar({
         <>
             <div
                 id="floating-container"
-                className={`z-50 flex items-center gap-3 transition-all duration-600 ${currentFilter !== 'All' || currentDetailItem ? 'float-search-sidebar' : 'float-search-root'}`}
+                className={`z-50 flex items-center gap-3 transition-all duration-600 ${currentFilter !== 'All' || currentDetailItem ? 'float-search-sidebar' : 'float-search-root'} ${isAiSidebarOpen ? 'sidebar-open' : ''}`}
             >
                 <div className="float-input-wrapper flex-1 bg-black border border-zinc-800 rounded-full h-14 flex items-center px-2 pl-2 shadow-2xl relative">
                     {/* Toggle Switch */}
@@ -181,7 +189,7 @@ export default function FloatingSearchBar({
                 <button
                     id="floating-add-btn"
                     onClick={onOpenAddModal}
-                    className={`h-14 px-8 bg-white hover:bg-zinc-200 text-black rounded-full font-bold text-sm shadow-xl flex items-center gap-2 shrink-0 transition-all ${currentFilter !== 'All' || currentDetailItem ? 'add-btn-hidden' : ''}`}
+                    className={`h-14 px-8 bg-white hover:bg-zinc-200 text-black rounded-full font-bold text-sm shadow-xl flex items-center gap-2 shrink-0 transition-all cursor-pointer ${currentFilter !== 'All' || currentDetailItem ? 'add-btn-hidden' : ''}`}
                 >
                     <Plus weight="bold" className="text-lg" /> Add
                 </button>

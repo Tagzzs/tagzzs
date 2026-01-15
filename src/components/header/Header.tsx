@@ -31,14 +31,14 @@ export default function Header({ onResetFilter }: HeaderProps) {
             <div className="flex flex-wrap gap-2">
                 <button
                     onClick={onResetFilter}
-                    className="px-3 py-1 rounded-full bg-[#4b2976] text-white text-[12px] border-[#9f63fe] font-bold shadow-[0_0_15px_rgba(159,85,255,0.3)] hover:opacity-90 transition-opacity"
+                    className="px-3 py-1 rounded-full bg-[#4b2976] text-white text-xs md:text-sm border-[#9f63fe] font-bold shadow-[0_0_15px_rgba(159,85,255,0.3)] hover:opacity-90 transition-opacity"
                 >
                     All
                 </button>
                 {filterTags.map((tag, index) => (
                     <button
                         key={index}
-                        className={`px-3 py-1 rounded-full border text-[12px] font-medium transition-colors ${tag.colorClass}`}
+                        className={`px-3 py-1 rounded-full border text-xs md:text-sm font-medium transition-colors ${tag.colorClass}`}
                     >
                         {tag.label}
                     </button>

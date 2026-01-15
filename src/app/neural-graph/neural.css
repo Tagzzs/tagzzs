@@ -34,14 +34,60 @@
 }
 
 /* Dynamic Sizing Classes applied by JS */
-#detail-view-layer.push-left {
-    left: 16rem;
-    /* w-64 */
+/* Layout Pushing Logic with Breakpoints */
+#canvas-container {
+    transition: margin 0.5s cubic-bezier(0.19, 1, 0.22, 1), width 0.5s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
-#detail-view-layer.push-right {
-    right: 20rem;
-    /* w-80 */
+@media (min-width: 768px) {
+    #canvas-container.push-left {
+        margin-left: 16rem;
+        width: calc(100% - 16rem);
+    }
+    #detail-view-layer.push-left { left: 16rem; }
+    
+    #floating-controls.push-left {
+        left: calc(50% + 8rem);
+    }
+    
+    /* Ensure combined width calculation works if both active */
+    #canvas-container.push-left.push-right {
+        width: calc(100% - 36rem);
+    }
+}
+
+@media (min-width: 1024px) {
+    #canvas-container.push-right {
+        margin-right: 20rem;
+        width: calc(100% - 20rem);
+    }
+    #detail-view-layer.push-right { right: 20rem; }
+    
+    #floating-controls.push-right { left: calc(50% - 10rem); }
+    #floating-controls.push-left.push-right { left: calc(50% - 2rem); }
+}
+
+@media (max-width: 767px) {
+    /* Left Overlay Mode */
+    #floating-controls.push-left {
+        left: calc(50% + 8rem); /* Shift right to avoid left overlay */
+        max-width: calc(100vw - 290px);
+    }
+}
+
+@media (max-width: 1023px) {
+    #floating-controls {
+        display: none !important;
+    }
+    .right-panel {
+        display: none !important;
+    }
+
+    /* Right Overlay Mode - keep push-right logic for canvas if needed, or remove since controls hidden? 
+       Actually canvas resizing logic for Right Sidebar is separate. 
+       If Right Sidebar is overlay (<1024), we don't push canvas.
+       So only Floating Controls logic matters here.
+    */
 }
 
 /* Sidebars */

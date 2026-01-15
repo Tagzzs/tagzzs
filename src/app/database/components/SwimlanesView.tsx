@@ -22,13 +22,13 @@ function SwimlanesView({
   onSelectItem,
 }: SwimlanesViewProps) {
   return (
-    <div className="flex flex-col gap-10 pb-20 overflow-y-auto px-10 h-full db-scroll">
+    <div className="flex flex-col gap-10 pb-20 overflow-y-auto px-4 md:px-10 h-full db-scroll">
       {treeData
         .find((c) => c.name === currentFilter)
         ?.children.map((subCat) => (
           <div key={subCat.name} className="flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-zinc-900 pb-2 mb-2">
-              <h3 className="text-xl font-bold text-white tracking-tight">
+              <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">
                 {subCat.name}
               </h3>
               <span className="text-xs text-zinc-600 font-bold">
@@ -45,7 +45,7 @@ function SwimlanesView({
                   <div
                     key={item.id}
                     onClick={() => onSelectItem(item)}
-                    className="min-w-[320px] w-[320px] h-[360px] bg-[#121212] border border-zinc-800 rounded-3xl p-5 flex flex-col hover:border-zinc-700 hover:shadow-xl transition-all cursor-pointer group snap-start relative overflow-hidden"
+                    className="min-w-[85vw] sm:min-w-[280px] md:min-w-[320px] w-[85vw] sm:w-[280px] md:w-[320px] h-[360px] bg-[#121212] border border-zinc-800 rounded-3xl p-5 flex flex-col hover:border-zinc-700 hover:shadow-xl transition-all cursor-pointer group snap-start relative overflow-hidden"
                   >
                     <div className="h-48 w-full bg-zinc-900/50 rounded-2xl mb-4 overflow-hidden relative shrink-0 border border-zinc-900">
                       <img

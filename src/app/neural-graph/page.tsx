@@ -136,10 +136,15 @@ export default function NeuralGraphPage() {
     // --- PANEL TOGGLE FUNCTIONS ---
     const toggleLeftPanel = () => {
         leftPanelRef.current?.classList.toggle('active');
-        if (leftPanelRef.current?.classList.contains('active')) {
+        const isActive = leftPanelRef.current?.classList.contains('active');
+        if (isActive) {
             detailLayerRef.current?.classList.add('push-left');
+            containerRef.current?.classList.add('push-left');
+            floatingRef.current?.classList.add('push-left');
         } else {
             detailLayerRef.current?.classList.remove('push-left');
+            containerRef.current?.classList.remove('push-left');
+            floatingRef.current?.classList.remove('push-left');
         }
     };
 
@@ -152,9 +157,13 @@ export default function NeuralGraphPage() {
 
         leftPanelRef.current?.classList.add('active');
         rightPanelRef.current?.classList.add('active');
-        floatingRef.current?.classList.add('docked');
+        // floatingRef.current?.classList.add('docked'); // Removed to prefer shifting
         detailLayerRef.current?.classList.add('push-right');
         detailLayerRef.current?.classList.add('push-left');
+        containerRef.current?.classList.add('push-right');
+        containerRef.current?.classList.add('push-left');
+        floatingRef.current?.classList.add('push-left');
+        floatingRef.current?.classList.add('push-right');
 
         renderMiniGraph(node);
 
@@ -192,7 +201,8 @@ export default function NeuralGraphPage() {
         // Open right panel if not open
         if (!rightPanelRef.current?.classList.contains('active')) {
             rightPanelRef.current?.classList.add('active');
-            detailLayerRef.current?.classList.add('push-left');
+            detailLayerRef.current?.classList.add('push-right'); // Should push right when chat opens panel
+            containerRef.current?.classList.add('push-right');
         }
 
         if (source === 'floating') {
@@ -209,8 +219,9 @@ export default function NeuralGraphPage() {
                 }
             }
 
-            // Dock the floating bar into the sidebar
-            floatingRef.current?.classList.add('docked');
+            // Dock the floating bar into the sidebar -> Changed to Shift
+            // floatingRef.current?.classList.add('docked');
+            floatingRef.current?.classList.add('push-right');
         }
 
         // Send via shared chat context
@@ -242,6 +253,11 @@ export default function NeuralGraphPage() {
         detailLayerRef.current?.classList.remove('active');
         detailLayerRef.current?.classList.remove('push-left');
         detailLayerRef.current?.classList.remove('push-right');
+        containerRef.current?.classList.remove('push-left');
+        containerRef.current?.classList.remove('push-right');
+        floatingRef.current?.classList.remove('push-left');
+        floatingRef.current?.classList.remove('push-right');
+        // floatingRef.current?.classList.remove('docked');
         setShowSummary(false);
     };
 
@@ -624,7 +640,7 @@ export default function NeuralGraphPage() {
     return (
         <div className="flex-1 flex flex-col h-full relative overflow-hidden">
             {/* Header with toggle button */}
-            <header className="h-14 bg-transparent pointer-events-none z-100 flex items-start pt-4 px-4 shrink-0 absolute top-0 left-0 right-0">
+            <header className="h-14 bg-transparent pointer-events-none z-[100] flex items-start pt-4 px-4 shrink-0 absolute top-0 left-0 right-0">
                 <button
                     onClick={toggleLeftPanel}
                     className="group pointer-events-auto text-white transition bg-black/50 backdrop-blur-md rounded-full p-2.5 border border-white/10 shadow-xl hover:border-white/20 hover:bg-black/80 flex flex-col justify-center gap-[3px] items-center w-9 h-9 box-border"
@@ -646,6 +662,7 @@ export default function NeuralGraphPage() {
                     nodesRef={nodesRef}
                     onToggleGroup={toggleGroup}
                     onSelectNode={selectNode}
+                    onToggle={toggleLeftPanel}
                 />
 
                 {/* Canvas Container */}
@@ -667,7 +684,6 @@ export default function NeuralGraphPage() {
                 {/* Right Panel */}
                 <NeuralRightPanel
                     rightPanelRef={rightPanelRef}
-                    miniGraphRef={miniGraphRef}
                     onResetCamera={resetCamera}
                 />
 

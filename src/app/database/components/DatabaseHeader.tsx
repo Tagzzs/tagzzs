@@ -28,14 +28,14 @@ export default function DatabaseHeader({
 }: DatabaseHeaderProps) {
     return (
         <>
-            <header className="h-12 flex items-center px-8 bg-black z-10 shrink-0">
+            <header className="h-12 md:h-12 flex items-center px-4 md:px-8 bg-black z-10 shrink-0">
                 <button onClick={onToggleSidebar} className="text-zinc-500 hover:text-white transition-colors">
                     <List weight="bold" className="text-xl" />
                 </button>
             </header>
 
-            <div className="px-8 py-2 flex flex-col justify-end shrink-0">
-                <h2 className="text-3xl text-white font-bold flex items-center gap-3 tracking-tight mb-1">
+            <div className="px-4 md:px-8 py-2 flex flex-col justify-end shrink-0">
+                <h2 className="text-2xl md:text-3xl text-white font-bold flex items-center gap-3 tracking-tight mb-1">
                     {currentDetailItem ? currentDetailItem.subCategory : (currentFilter === 'All' ? 'Knowledge Base' : currentFilter)}
                 </h2>
                 <div className="text-xs text-zinc-500 font-medium flex items-center gap-2">

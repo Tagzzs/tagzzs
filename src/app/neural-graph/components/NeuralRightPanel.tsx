@@ -13,9 +13,8 @@ interface NeuralRightPanelProps {
 
 export default function NeuralRightPanel({
     rightPanelRef,
-    miniGraphRef,
     onResetCamera
-}: NeuralRightPanelProps) {
+}: Omit<NeuralRightPanelProps, 'miniGraphRef'>) {
     const { messages: chatMessages, isSending } = useChat();
 
     return (
@@ -24,31 +23,26 @@ export default function NeuralRightPanel({
             id="right-panel"
             className="absolute top-0 bottom-0 right-0 w-80 sidebar-panel right-panel flex flex-col shadow-2xl border-l border-zinc-800 bg-black pb-14"
         >
-            <div className="h-[35%] border-b border-zinc-900 relative bg-black overflow-hidden flex flex-col">
-                <div className="absolute top-4 left-4 text-[10px] font-bold text-zinc-500 uppercase z-10 flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-600"></div> Neural Map
-                </div>
-                {/* Close Button */}
-                <button
-                    onClick={onResetCamera}
-                    className="absolute top-4 right-4 z-20 w-6 h-6 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-700 flex items-center justify-center transition"
-                    title="Close"
-                >
-                    <X weight="bold" className="text-xs" />
-                </button>
-                <svg ref={miniGraphRef} className="w-full h-full opacity-100 transition-opacity duration-500" id="ai-graph-svg"></svg>
-            </div>
-            <div className="flex-1 flex flex-col p-0 overflow-hidden bg-black relative">
+            {/* Close Button */}
+            <button
+                onClick={onResetCamera}
+                className="absolute top-4 right-4 z-20 w-6 h-6 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-700 flex items-center justify-center transition"
+                title="Close"
+            >
+                <X weight="bold" className="text-xs" />
+            </button>
+
+            <div className="flex-1 flex flex-col p-0 pt-14 overflow-hidden bg-black relative">
                 <div className="w-full h-40 relative shrink-0 flex items-center justify-center bg-gradient-to-b from-black to-zinc-900/10">
                     <NanobotSphere className="w-full h-full object-cover opacity-90" />
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-4 p-5 pt-0 pb-4" id="chat-history">
                     {chatMessages.length === 0 && (
                         <div className="flex gap-3 fade-in">
-                            <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center shrink-0 text-xs text-white border border-zinc-800">
+                            <div className="my-10 w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center shrink-0 text-xs text-white border border-zinc-800">
                                 K
                             </div>
-                            <div className="bg-zinc-900 p-3 rounded-2xl rounded-tl-none text-xs text-zinc-400 leading-relaxed shadow-sm">
+                            <div className="my-10 bg-zinc-900 p-3 rounded-2xl rounded-tl-none text-xs text-zinc-400 leading-relaxed shadow-sm">
                                 Neural interface active. Click a node to analyze its connections.
                             </div>
                         </div>

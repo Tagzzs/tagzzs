@@ -239,10 +239,10 @@ export default function SearchBar({ onOpenAddModal, content, tagsMap, onSearchCh
                     <div
                         className={`absolute left-0.5 w-[calc(50%-2px)] h-[calc(100%-4px)] bg-[#4b2976] rounded-full transition-transform duration-300 shadow-sm ${isAiMode ? 'translate-x-full' : 'translate-x-0'}`}
                     />
-                    <div className={`relative z-10 flex-1 h-full flex items-center justify-center gap-1 text-[12px] font-bold transition-colors duration-300 ${!isAiMode ? 'text-white' : 'text-zinc-500'}`}>
+                    <div className={`relative z-10 flex-1 h-full flex items-center justify-center gap-1 text-xs md:text-sm font-bold transition-colors duration-300 ${!isAiMode ? 'text-white' : 'text-zinc-500'}`}>
                         DB
                     </div>
-                    <div className={`relative z-10 flex-1 h-full flex items-center justify-center gap-1 text-[12px] font-bold transition-colors duration-300 ${isAiMode ? 'text-white' : 'text-zinc-500'}`}>
+                    <div className={`relative z-10 flex-1 h-full flex items-center justify-center gap-1 text-xs md:text-sm font-bold transition-colors duration-300 ${isAiMode ? 'text-white' : 'text-zinc-500'}`}>
                         AI
                     </div>
                 </div>
@@ -264,7 +264,7 @@ export default function SearchBar({ onOpenAddModal, content, tagsMap, onSearchCh
                     onChange={(e) => handleSearchChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={isAiMode ? "Ask Kai AI anything... (Press Enter)" : "Search in Database..."}
-                    className="bg-transparent w-full h-full outline-none text-white placeholder-zinc-500 text-[12px]"
+                    className="bg-transparent w-full h-full outline-none text-white placeholder-zinc-500 text-sm"
                     onFocus={() => setIsSearchFocused(true)}
                     onBlur={() => setIsSearchFocused(false)}
                 />
@@ -283,10 +283,10 @@ export default function SearchBar({ onOpenAddModal, content, tagsMap, onSearchCh
             {/* Add Button */}
             <button
                 onClick={onOpenAddModal}
-                className="pointer-events-auto h-10 lg:h-12 px-4 lg:px-5 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg border border-[#9f63fe]/20 bg-[#4b2976] text-white hover:bg-[#4b2976] hover:border-[#4b2976] hover:shadow-[0_0_15px_rgba(159,85,255,0.3)] overflow-hidden"
+                className="pointer-events-auto h-10 lg:h-12 px-4 lg:px-5 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg border border-[#9f63fe]/20 bg-[#4b2976] text-white hover:bg-[#4b2976] hover:border-[#4b2976] hover:shadow-[0_0_15px_rgba(159,85,255,0.3)] overflow-hidden cursor-pointer"
             >
                 <Plus size={16} weight="bold" className="shrink-0" />
-                <span className={`font-medium text-xs whitespace-nowrap transition-all duration-300 overflow-hidden ${isSearchFocused ? 'opacity-0 max-w-0 ml-0' : 'opacity-100 max-w-[50px] ml-2'}`}>
+                <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 overflow-hidden ${isSearchFocused ? 'opacity-0 max-w-0 ml-0' : 'opacity-100 max-w-[50px] ml-2'}`}>
                     Add
                 </span>
             </button>

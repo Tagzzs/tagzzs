@@ -8,12 +8,16 @@ interface NeuralMapSidebarProps {
     currentFilter: string;
     currentDetailItem: any | null;
     graphRef: React.RefObject<SVGSVGElement | null>;
+    isOpen: boolean;
+    onClose: () => void;
 }
 
 export default function NeuralMapSidebar({
     currentFilter,
     currentDetailItem,
-    graphRef
+    graphRef,
+    isOpen,
+    onClose
 }: NeuralMapSidebarProps) {
     const nanobotRef = useRef<HTMLCanvasElement>(null);
     const { messages, sendMessage, isSending } = useChat();
@@ -25,7 +29,7 @@ export default function NeuralMapSidebar({
         if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
-    }, [messages, isSending]);
+    }, [messages, isSending, isOpen]);
 
     const handleSendMessage = async () => {
         if (!inputValue.trim() || isSending) return;
@@ -96,17 +100,19 @@ export default function NeuralMapSidebar({
     return (
         <aside
             id="right-sidebar"
-            className={`w-80 bg-black border-l border-zinc-900 flex flex-col flex-shrink-0 z-20 transition-all ${currentFilter !== 'All' || currentDetailItem ? 'flex' : 'hidden'}`}
+            className={`w-80 bg-black border-l border-zinc-900 flex-col flex-shrink-0 z-50 transition-all ${isOpen ? 'hidden lg:flex' : 'hidden'} fixed inset-y-0 right-0 min-[1600px]:relative min-[1600px]:inset-auto min-[1600px]:z-20`}
         >
-            <div className="h-[35%] border-b border-zinc-900 relative bg-black overflow-hidden flex flex-col">
-                <div className="absolute top-4 left-4 text-[10px] font-bold text-zinc-500 uppercase z-10 flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-600"></div> Neural Map
-                </div>
-                <svg ref={graphRef} className="w-full h-full opacity-100 transition-opacity duration-500" id="ai-graph-svg"></svg>
+            <div className="absolute top-4 right-4 z-50">
+                <button 
+                    onClick={onClose}
+                    className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
             </div>
 
             <div className="flex-1 flex flex-col p-0 overflow-hidden bg-black relative">
-                <div className="w-full h-40 relative shrink-0 flex items-center justify-center bg-gradient-to-b from-black to-zinc-900/10">
+                <div className="mt-8 w-full h-40 relative shrink-0 flex items-center justify-center bg-gradient-to-b from-black to-zinc-900/10">
                     <canvas ref={nanobotRef} className="w-full h-full object-cover opacity-90"></canvas>
                 </div>
                 <div 
@@ -115,7 +121,7 @@ export default function NeuralMapSidebar({
                     id="chat-history"
                 >
                     {/* Welcome Message */}
-                    <div className="flex gap-3 fade-in">
+                    <div className="my-10 flex gap-3 fade-in">
                         <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center flex-shrink-0 text-xs text-white border border-zinc-800">K</div>
                         <div className="bg-zinc-900 p-3 rounded-2xl rounded-tl-none text-xs text-zinc-400 leading-relaxed shadow-sm">
                             Neural interface active. I'm tracking your navigation context.
@@ -152,7 +158,7 @@ export default function NeuralMapSidebar({
                 </div>
 
                 {/* Input Area */}
-                <div className="p-4 border-t border-zinc-900 bg-black sticky bottom-0 z-10">
+                <div className="p-3 border-t border-zinc-900 bg-black sticky bottom-0 z-10">
                     <div className="flex flex-col gap-3">
                         {/* Chat Input */}
                         <div className="relative flex items-center bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden shadow-sm focus-within:border-zinc-700 transition-colors">
