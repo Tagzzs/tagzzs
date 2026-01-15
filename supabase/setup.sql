@@ -764,7 +764,8 @@ CREATE TYPE credit_feature AS ENUM (
     'kai_ai',
     'youtube_extract',
     'topup',
-    'promo_code'
+    'promo_code',
+    'daily_reward'
 );
 
 ALTER TABLE users
@@ -965,3 +966,28 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+CREATE OR REPLACE FUNCTION distribute_daily_credits()
+RETURNS VOID AS $$
+BEGIN
+    UPDATE public.users
+    SET credits_balance = credits_balance + 15;
+
+    INSERT INTO public.credit_ledger (userid, delta, feature, request_id, metadata)
+    SELECT 
+        userid, 
+        15, 
+        'daily_reward', 
+        gen_random_uuid(), 
+        jsonb_build_object('reason', 'Daily Reward', 'time_utc', '00:00')
+    FROM public.users;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+SELECT cron.schedule(
+    'daily-credit-reward',
+    '0 0 * * *',
+    'SELECT distribute_daily_credits();'
+)
