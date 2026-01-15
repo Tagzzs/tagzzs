@@ -157,7 +157,7 @@ export default function MonthlyBreakdown({
     // Loading skeleton
     if (loading) {
         return (
-            <div className="glass-panel bg-[#050505] mt-12 p-5 flex flex-col md:flex-row gap-6 items-center h-auto md:h-96 animate-pulse">
+            <div className="glass-panel bg-[#050505] mt-12 p-5 flex flex-col lg:flex-row gap-6 items-center h-auto lg:h-96 animate-pulse">
                 <div className="flex-1 h-full flex flex-col justify-center gap-4 w-full">
                     <div className="h-6 bg-zinc-800/50 rounded w-1/3 ml-2" />
                     <div className="h-10 bg-zinc-800/50 rounded w-1/4 ml-2" />
@@ -187,43 +187,44 @@ export default function MonthlyBreakdown({
     return (
         <div
             onClick={onClick}
-            className="glass-panel bg-[#050505] mt-12 p-5 flex flex-col md:flex-row gap-6 items-center h-auto md:h-96 cursor-pointer hover:bg-white/5 transition-colors group/panel"
+            className="glass-panel bg-[#050505] mt-12 p-6 flex flex-col lg:flex-row xl:flex-col 2xl:flex-row gap-8 items-center h-auto lg:h-96 xl:h-auto 2xl:h-96 cursor-pointer hover:bg-white/5 transition-colors group/panel"
         >
             {/* Left Section */}
             <div className="flex-1 h-full flex flex-col justify-center gap-4 w-full">
-                <div className="flex ml-2 justify-between items-start">
+                <div className="flex justify-between items-center w-full px-2">
                     <div>
-                        <div className="text-[14px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+                        <div className="text-xs md:text-sm font-bold text-zinc-500 uppercase tracking-widest mb-1">
                             <span className="text-gradient">Monthly Breakdown</span>
                         </div>
-                        <div className="text-3xl mt-2 font-medium text-white">
-                            {totalItems} <span className="text-xs text-zinc-500 font-normal">items</span>
+                        <div className="text-2xl md:text-3xl lg:text-4xl mt-2 font-medium text-white">
+                            {totalItems} <span className="text-xs md:text-sm text-zinc-500 font-normal">items</span>
                         </div>
                     </div>
                     {growthPercent > 0 && (
-                        <div className="flex items-center gap-1 bg-[#9F55FF]/20 border border-[#9F55FF]/30 px-2 py-0.5 rounded-full text-[15px] text-[#9F55FF] font-bold mr-8">
+                        <div className="flex items-center gap-1 bg-[#9F55FF]/20 border border-[#9F55FF]/30 px-2 py-0.5 rounded-full text-[15px] text-[#9F55FF] font-bold">
                             <TrendUp size={15} weight="fill" />
                             +{growthPercent}%
                         </div>
                     )}
                 </div>
 
-                <div className="flex flex-col ml-15 xl:flex-row items-center gap-6">
+                <div className="flex flex-col xl:flex-row items-center gap-6 justify-center w-full">
+
                     {/* Doughnut Chart */}
                     <div
-                        className="relative ml-0 xl:ml-10 h-64 w-64 shrink-0"
+                        className="relative h-64 w-64 shrink-0"
                         onMouseLeave={() => setHoveredIndex(null)}
                     >
                         <Doughnut data={chartData} options={chartOptions} />
-                        <div className="chart-center-text text-[9px] font-bold text-zinc-600">RATIO</div>
+                        <div className="chart-center-text text-[8px] md:text-[10px] font-bold text-zinc-600">RATIO</div>
                     </div>
 
                     {/* Legend */}
-                    <div className="grid grid-cols-2 ml-4 gap-x-6 gap-y-2 h-auto xl:h-28 w-full sm:w-auto">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 h-auto xl:h-28 w-full sm:w-auto px-4 xl:px-0">
                         {legendItems.map((item, index) => (
                             <div
                                 key={index}
-                                className={`flex ml-0 xl:ml-12 items-center gap-2 text-[16px] xl:text-[20px] transition-all duration-300 ${hoveredIndex === index
+                                className={`flex items-center gap-2 text-sm xl:text-[20px] transition-all duration-300 ${hoveredIndex === index
                                     ? 'text-white scale-105 font-medium'
                                     : hoveredIndex !== null
                                         ? 'text-zinc-600 blur-[1px]'
@@ -247,23 +248,23 @@ export default function MonthlyBreakdown({
             </div>
 
             {/* Divider */}
-            <div className="hidden md:block w-px h-[70%] bg-white/5" />
+            <div className="hidden lg:block xl:hidden 2xl:block w-px h-[70%] bg-white/5" />
 
             {/* Side Stats */}
-            <div className="w-full md:w-64 flex flex-row md:flex-col gap-4 justify-center">
+            <div className="w-full lg:w-64 xl:w-full 2xl:w-64 flex flex-row lg:flex-col xl:flex-row 2xl:flex-col gap-4 justify-center">
                 <div className="flex-1 bg-[#111] p-5 rounded-2xl border border-white/5 hover:border-[#9F55FF]/50 transition-colors">
-                    <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase mb-2">
+                    <div className="flex items-center gap-2 text-[10px] md:text-xs text-zinc-500 font-bold uppercase mb-2">
                         <Target size={14} weight="fill" className="text-[#9F55FF]" />
                         Streaks
                     </div>
-                    <div className="text-2xl font-bold text-white">{totalItems}</div>
+                    <div className="text-xl md:text-2xl font-bold text-white">{totalItems}</div>
                 </div>
                 <div className="flex-1 bg-[#111] p-5 rounded-2xl border border-white/5 hover:border-[#9F55FF]/50 transition-colors">
-                    <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase mb-2">
+                    <div className="flex items-center gap-2 text-[10px] md:text-xs text-zinc-500 font-bold uppercase mb-2">
                         <Stack size={14} weight="fill" className="text-[#9F55FF]" />
                         Top
                     </div>
-                    <div className="text-2xl font-bold text-white">{topTag}</div>
+                    <div className="text-xl md:text-2xl font-bold text-white">{topTag}</div>
                 </div>
             </div>
         </div>

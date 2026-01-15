@@ -33,7 +33,7 @@ function LibrarySidebar({
     return (
         <aside
             id="left-sidebar"
-            className={`bg-black border-r border-zinc-900 flex flex-col flex-shrink-0 z-20 overflow-hidden relative transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-0'}`}
+            className={`bg-black/95 md:bg-black border-r border-zinc-900 flex flex-col flex-shrink-0 z-40 overflow-hidden absolute inset-y-0 left-0 md:relative h-full transition-all duration-300 ${isSidebarOpen ? 'w-64 border-r' : 'w-0 border-r-0'}`}
         >
             <div className="p-8 pb-4 shrink-0 flex items-center justify-between">
                 <h1 className="text-white font-black tracking-widest text-lg uppercase flex items-center gap-2 cursor-pointer" onClick={() => onUpdateView('All')}>

@@ -107,9 +107,11 @@ class Tools:
 
                 try:
                     supabase = create_client(supabase_url, supabase_key)
-                    
-
-
+                    response = supabase.table("content").select("contentid, title, link, description, content_type, content_tags(tags(tag_name))").in_("contentid", content_ids).eq("userid", user_id).execute()
+                    return response.data
+                except Exception as inner_e:
+                    logger.error(f"[TOOLS] fetch_content error: {inner_e}")
+                    return []
             content_details = await asyncio.to_thread(_fetch_content)
 
             if not content_details:

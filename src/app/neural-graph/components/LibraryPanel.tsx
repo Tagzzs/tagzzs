@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { CaretRight } from '@phosphor-icons/react';
+import { CaretRight, SidebarSimple } from '@phosphor-icons/react';
 
 interface DeepDataItem {
     name: string;
@@ -42,6 +42,7 @@ interface LibraryPanelProps {
     nodesRef: React.RefObject<GraphNode[]>;
     onToggleGroup: (id: string) => void;
     onSelectNode: (node: GraphNode) => void;
+    onToggle: () => void;
 }
 
 function LibraryPanel({
@@ -51,7 +52,8 @@ function LibraryPanel({
     selectedNode,
     nodesRef,
     onToggleGroup,
-    onSelectNode
+    onSelectNode,
+    onToggle
 }: LibraryPanelProps) {
     return (
         <aside
@@ -60,7 +62,16 @@ function LibraryPanel({
             className="absolute top-0 bottom-0 left-0 w-64 sidebar-panel left-panel flex flex-col border-r border-zinc-800 bg-black pt-14"
         >
             <div className="p-4 pt-2">
-                <h2 className="text-lg font-bold text-white mb-4 pl-1">Library</h2>
+                <div className="flex items-center justify-between mb-4 pl-1 pr-1">
+                    <h2 className="text-lg font-bold text-white">Library</h2>
+                    <button 
+                        onClick={onToggle}
+                        className="text-zinc-500 hover:text-white transition-colors p-1"
+                        title="Close Sidebar"
+                    >
+                        <SidebarSimple weight="bold" />
+                    </button>
+                </div>
                 <div id="file-tree" className="flex flex-col gap-1 select-none overflow-y-auto h-full pb-10">
                     {deepData.map((cat, i) => {
                         const catId = `cat-${i}`;

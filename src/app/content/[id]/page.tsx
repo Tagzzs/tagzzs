@@ -22,7 +22,7 @@ export default function ContentPage() {
     const id = params.id as string;
 
     // Fetch content and tags
-    const { content, loading: contentLoading, refetch } = useContent();
+    const { content, loading: contentLoading } = useContent();
     const { tagsMap, tagTree, loading: tagsLoading } = useTags();
 
     // API for deletion
@@ -157,12 +157,11 @@ export default function ContentPage() {
                     ...updates
                 }
             });
-            // Refetch content to update UI immediately
-            await refetch();
+            // Optionally refetch content here if needed, or rely on local state updates for now
         } catch (error) {
             console.error("Failed to update content:", error);
         }
-    }, [currentDetailItem, api, refetch]);
+    }, [currentDetailItem, api]);
 
     // Handle Tag Removal
     const handleRemoveTag = useCallback(async (tagIdToRemove: string) => {

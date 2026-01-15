@@ -48,6 +48,8 @@ function DatabasePageContent() {
     const [quickCaptureModalOpen, setQuickCaptureModalOpen] = useState(false);
 
 
+    const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
+
     const graphRef = useRef<SVGSVGElement>(null);
 
     // Expand all categories by default when tree data loads
@@ -154,7 +156,7 @@ function DatabasePageContent() {
 
         centerGroup.appendChild(centerCircle); centerGroup.appendChild(centerText);
         svg.appendChild(centerGroup);
-    }, [currentFilter]);
+    }, [currentFilter, treeData]);
 
     // Graph Rendering Effect
     useEffect(() => {
@@ -207,6 +209,7 @@ function DatabasePageContent() {
                 sidebarExpandedCats={sidebarExpandedCats}
                 onToggleSidebarCat={toggleSidebarCat}
                 onUpdateView={handleUpdateView}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             />
 
             {/* Main Content */}
@@ -275,6 +278,8 @@ function DatabasePageContent() {
                     searchMode={searchMode}
                     onSetSearchMode={setSearchMode}
                     onOpenAddModal={() => setQuickCaptureModalOpen(true)}
+                    isAiSidebarOpen={isAiSidebarOpen}
+                    setAiSidebarOpen={setIsAiSidebarOpen} 
                 />
             </main>
 
@@ -288,6 +293,8 @@ function DatabasePageContent() {
                 currentFilter={currentFilter}
                 currentDetailItem={null}
                 graphRef={graphRef}
+                isOpen={isAiSidebarOpen}
+                onClose={() => setIsAiSidebarOpen(false)}
             />
         </div>
     );
