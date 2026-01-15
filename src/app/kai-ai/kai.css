@@ -1,0 +1,155 @@
+/* src/app/kai-ai/kai.css */
+/* Ported from KaiAIPage.html */
+
+/* --- SCROLLBAR --- */
+.kai-scroll ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+.kai-scroll ::-webkit-scrollbar-track {
+    background: #000000;
+}
+
+.kai-scroll ::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 4px;
+}
+
+.kai-scroll ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+}
+
+.kai-scroll * {
+    scrollbar-width: thin;
+    scrollbar-color: #27272a #000000;
+}
+
+/* Transitions */
+.history-sidebar-transition {
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.history-collapsed .sidebar-text {
+    opacity: 0;
+    pointer-events: none;
+    display: none;
+}
+
+.right-sidebar-transition {
+    transition: width 0.4s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.right-sidebar-hover:hover {
+    width: 22rem;
+}
+
+.visual-content {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.right-sidebar-hover:hover .visual-content {
+    opacity: 1;
+    transition-delay: 0.15s;
+    pointer-events: auto;
+}
+
+.collapsed-icon {
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+
+.right-sidebar-hover:hover .collapsed-icon {
+    opacity: 0;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #71717a;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.nav-item:hover {
+    background: #18181b;
+    color: #fff;
+}
+
+.nav-item.active {
+    background: linear-gradient(90deg, rgba(167, 139, 250, 0.10) 0%, transparent 100%);
+    border-left: 3px solid #8871BE;
+    color: #D8CEF0;
+}
+
+.hero-input {
+    background: #18181b;
+    border: 1px solid #27272a;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+.hero-input:focus-within {
+    background: #1f1f22;
+    border-color: #D8CEF0;
+    box-shadow: 0 0 0 1px rgba(216, 206, 240, 0.1), 0 10px 40px -10px rgba(216, 206, 240, 0.1);
+}
+
+.mode-card {
+    background: linear-gradient(145deg, #121212, #0a0a0a);
+    border: 1px solid #27272a;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.mode-card:hover {
+    border-color: rgba(216, 206, 240, 0.4);
+    transform: translateY(-2px);
+}
+
+.mode-card.active {
+    background: linear-gradient(145deg, rgba(216, 206, 240, 0.08), #0a0a0a);
+    border-color: #D8CEF0;
+    box-shadow: 0 0 15px rgba(216, 206, 240, 0.05);
+}
+
+.mode-card.active i {
+    color: #D8CEF0;
+}
+
+.mode-card.active h3 {
+    color: #fff;
+}
+
+/* CANVAS CONTAINER */
+.orb-stage {
+    width: 300px;
+    height: 300px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+canvas {
+    display: block;
+}
+
+/* Dropdown transition */
+.folder-content {
+    transition: all 0.3s ease;
+}
+
+/* Lavender Colors for arbitrary values usage if not in config */
+:root {
+    --lavender-base: #D8CEF0;
+    --lavender-dim: #6D6780;
+    --lavender-accent: #A78BFA;
+}

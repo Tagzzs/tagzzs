@@ -18,7 +18,7 @@ from app.utils.supabase.supabase_client import supabase
 
 class AddContentSchema(BaseModel):
     userId: str = Field(..., min_length=1)
-    link: HttpUrl
+    link: str
     title: str = Field(..., min_length=1)
     contentType: Optional[str] = "article"
     description: Optional[str] = ""
@@ -27,6 +27,7 @@ class AddContentSchema(BaseModel):
     tagsId: List[str] = []
     thumbnailUrl: Optional[str] = None
     rawContent: str = ""
+    summary: Optional[str] = ""
 
 
 class EmbeddingMetadata(BaseModel):
@@ -130,7 +131,7 @@ async def add_content(req: Request):
                     "user_id": user_id,
                     "content_id": content_id,
                     "extracted_text": raw_c or desc or "",
-                    "summary": desc or "",
+                    "summary": validated_data.summary or desc or "",
                     "tags": validated_data.tagsId or [],
                     "source_url": str(validated_data.link),
                     "source_type": validated_data.contentType or "",
@@ -143,7 +144,7 @@ async def add_content(req: Request):
                         "chunk_count": emb_data.get("chunk_count", 0),
                     }
             except Exception as e:
-                print(f"Embedding failed: {e}")
+
 
         try:
             tag_color_map = {
@@ -159,7 +160,7 @@ async def add_content(req: Request):
                 "p_description": validated_data.description,
                 "p_thumbnail_url": validated_data.thumbnailUrl,
                 "p_content_type": validated_data.contentType,
-                "p_content_source": str(validated_data.link.host),
+                "p_content_source": str(urlparse(validated_data.link).netloc) if "://" in validated_data.link else "local",
                 "p_read_time": int(validated_data.readTime or 0),
                 "p_raw_content": validated_data.rawContent,
                 "p_note_data": {"text": validated_data.personalNotes},

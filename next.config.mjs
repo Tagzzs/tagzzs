@@ -1,21 +1,30 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable React Strict Mode for better debugging
+  reactStrictMode: true,
+
+  // Enable compression for smaller responses
+  compress: true,
+
+  // Image optimization - allow all HTTPS sources
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: '*',
+        protocol: "https",
+        hostname: "*",
       },
     ],
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    minimumCacheTTL: 60 * 60 * 24, // 24 hours
   },
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Allow native modules on server side
-      config.externals = [...(config.externals || []), 'chromadb', 'onnxruntime-node'];
-    }
-    return config;
-  },
+
+  // External packages for server-side (replaces webpack externals)
+  serverExternalPackages: ['chromadb', 'onnxruntime-node'],
+
+  // Empty turbopack config to silence the warning (Next.js 16 uses Turbopack by default)
+  turbopack: {},
 };
 
 export default nextConfig;
-

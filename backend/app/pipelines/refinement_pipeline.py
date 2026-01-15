@@ -143,31 +143,41 @@ class RefinementPipeline:
             # ========== STEP 1: SUMMARIZATION ==========
             summarization_start = time.time()
             try:
-                self.logger.info("📝 Step 1/2: Summarizing content...")
-
-                summary_response = await summarize_content(
-                    text=extracted_text,
-                    max_length=self.config.summary_max_length,
-                    min_length=self.config.summary_min_length,
-                )
-
-                if summary_response.success:
-                    response.summary = summary_response.summary
-                    response.processing_times_ms["summarization"] = (
-                        summary_response.processing_time_ms
-                    )
+                # Check if enough text for summarization
+                if len(extracted_text) < 50:
                     self.logger.info(
-                        f"✅ Summarization complete: {len(response.summary)} chars"
+                        "ℹ️ Text too short for summarization, using original text"
                     )
+                    response.summary = extracted_text
+                    response.processing_times_ms["summarization"] = 0
                 else:
-                    self.logger.warning(
-                        f"⚠️ Summarization failed: {summary_response.errors}"
+                    self.logger.info("📝 Step 1/2: Summarizing content...")
+
+                    summary_response = await summarize_content(
+                        text=extracted_text,
+                        max_length=self.config.summary_max_length,
+                        min_length=self.config.summary_min_length,
                     )
-                    response.errors.extend(summary_response.errors)
-                    response.summary = extracted_text[: self.config.summary_max_length]
-                    response.processing_times_ms["summarization"] = (
-                        summary_response.processing_time_ms
-                    )
+
+                    if summary_response.success:
+                        response.summary = summary_response.summary
+                        response.processing_times_ms["summarization"] = (
+                            summary_response.processing_time_ms
+                        )
+                        self.logger.info(
+                            f"✅ Summarization complete: {len(response.summary)} chars"
+                        )
+                    else:
+                        self.logger.warning(
+                            f"⚠️ Summarization failed: {summary_response.errors}"
+                        )
+                        response.errors.extend(summary_response.errors)
+                        response.summary = extracted_text[
+                            : self.config.summary_max_length
+                        ]
+                        response.processing_times_ms["summarization"] = (
+                            summary_response.processing_time_ms
+                        )
 
             except Exception as e:
                 error_msg = f"Summarization failed: {str(e)}"
@@ -181,29 +191,35 @@ class RefinementPipeline:
             # ========== STEP 2: TAG GENERATION ==========
             tagging_start = time.time()
             try:
-                self.logger.info("🏷️  Step 2/2: Generating tags...")
-
                 tagging_text = response.summary if response.summary else extracted_text
 
-                tag_response = await generate_tags(
-                    text=tagging_text, top_k=self.config.top_tags
-                )
-
-                if tag_response.success:
-                    response.tags = [tag.name for tag in tag_response.tags]
-                    response.processing_times_ms["tagging"] = (
-                        tag_response.processing_time_ms
-                    )
-                    self.logger.info(f"✅ Tag generation complete: {response.tags}")
-                else:
-                    self.logger.warning(
-                        f"⚠️ Tag generation failed: {tag_response.errors}"
-                    )
-                    response.errors.extend(tag_response.errors)
+                # Check if enough text for tag generation
+                if len(tagging_text) < 20:
+                    self.logger.info("ℹ️ Text too short for AI tagging, skipping")
                     response.tags = []
-                    response.processing_times_ms["tagging"] = (
-                        tag_response.processing_time_ms
+                    response.processing_times_ms["tagging"] = 0
+                else:
+                    self.logger.info("🏷️  Step 2/2: Generating tags...")
+
+                    tag_response = await generate_tags(
+                        text=tagging_text, top_k=self.config.top_tags
                     )
+
+                    if tag_response.success:
+                        response.tags = [tag.name for tag in tag_response.tags]
+                        response.processing_times_ms["tagging"] = (
+                            tag_response.processing_time_ms
+                        )
+                        self.logger.info(f"✅ Tag generation complete: {response.tags}")
+                    else:
+                        self.logger.warning(
+                            f"⚠️ Tag generation failed: {tag_response.errors}"
+                        )
+                        response.errors.extend(tag_response.errors)
+                        response.tags = []
+                        response.processing_times_ms["tagging"] = (
+                            tag_response.processing_time_ms
+                        )
 
             except Exception as e:
                 error_msg = f"Tag generation failed: {str(e)}"

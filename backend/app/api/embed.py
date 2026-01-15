@@ -21,7 +21,7 @@ async def embed_and_store_chunks(request: dict):
         from app.connections import get_user_collection
 
         # Validate request
-        required_fields = ["user_id", "content_id", "extracted_text", "summary"]
+        required_fields = ["user_id", "content_id", "extracted_text"]
         for field in required_fields:
             if field not in request or not request[field]:
                 raise ValueError(f"Missing required field: {field}")
@@ -30,59 +30,103 @@ async def embed_and_store_chunks(request: dict):
         user_id = request["user_id"]
         content_id = request["content_id"]
         extracted_text = request["extracted_text"]
-        summary = request["summary"]
+        summary = request.get("summary", "")
+        if not summary or len(summary.strip()) == 0:
+            # Fallback: Use first 200 chars of text as summary
+            summary = (
+                extracted_text[:200] + "..."
+                if len(extracted_text) > 200
+                else extracted_text
+            )
         tags = request.get("tags", [])
         source_url = request.get("source_url", "")
         source_type = request.get("source_type", "web")
 
         # Step 1: Chunk the content
-        chunker = TextChunker()
-        chunks = chunker.chunk_text(extracted_text)
-        if not chunks:
-            raise ValueError("Failed to chunk content")
+        MIN_CHUNKING_LENGTH = 500
+        should_chunk = True
+
+        # Optimize for short image/document text
+        if (source_type in ["image", "document"]) and len(
+            extracted_text
+        ) < MIN_CHUNKING_LENGTH:
+            should_chunk = False
+            chunks = []
+            print(
+                f"ℹ️ Content too short ({len(extracted_text)} chars) for chunking, storing summary only."
+            )
+        else:
+            chunker = TextChunker()
+            chunks = chunker.chunk_text(extracted_text)
+            if not chunks:
+                raise ValueError("Failed to chunk content")
 
         # Step 2: Generate embeddings
-        chunk_texts = [chunk.text for chunk in chunks]
+        if should_chunk:
+            chunk_texts = [chunk.text for chunk in chunks]
 
-        # Truncate texts to safe token length
-        MAX_EMBEDDING_LENGTH = 400
-        truncated_chunk_texts = [
-            text[:MAX_EMBEDDING_LENGTH] if len(text) > MAX_EMBEDDING_LENGTH else text
-            for text in chunk_texts
-        ]
-        summary_for_embedding = (
-            summary[:MAX_EMBEDDING_LENGTH]
-            if len(summary) > MAX_EMBEDDING_LENGTH
-            else summary
-        )
-        all_texts = truncated_chunk_texts + [summary_for_embedding]
+            # Truncate texts to safe token length
+            MAX_EMBEDDING_LENGTH = 400
+            truncated_chunk_texts = [
+                text[:MAX_EMBEDDING_LENGTH]
+                if len(text) > MAX_EMBEDDING_LENGTH
+                else text
+                for text in chunk_texts
+            ]
+            summary_for_embedding = (
+                summary[:MAX_EMBEDDING_LENGTH]
+                if len(summary) > MAX_EMBEDDING_LENGTH
+                else summary
+            )
+            all_texts = truncated_chunk_texts + [summary_for_embedding]
 
-        generator = EmbeddingGenerator()
-        embeddings = await generator.generate_embeddings(all_texts)
+            generator = EmbeddingGenerator()
+            embeddings = await generator.generate_embeddings(all_texts)
 
-        if not embeddings or len(embeddings) != len(all_texts):
-            raise ValueError(
-                f"Embedding generation failed: expected {len(all_texts)} embeddings, got {len(embeddings) if embeddings else 0}"
+            if not embeddings or len(embeddings) != len(all_texts):
+                raise ValueError(
+                    f"Embedding generation failed: expected {len(all_texts)} embeddings, got {len(embeddings) if embeddings else 0}"
+                )
+
+            chunk_embeddings = embeddings[:-1]
+            summary_embedding = embeddings[-1]
+        else:
+            # Single embedding for summary only
+            MAX_EMBEDDING_LENGTH = 400
+            summary_for_embedding = (
+                summary[:MAX_EMBEDDING_LENGTH]
+                if len(summary) > MAX_EMBEDDING_LENGTH
+                else summary
             )
 
-        chunk_embeddings = embeddings[:-1]
-        summary_embedding = embeddings[-1]
+            generator = EmbeddingGenerator()
+            embeddings = await generator.generate_embeddings([summary_for_embedding])
 
-        # Step 3: Store chunks in Chroma
-        chunks_collection = get_user_collection(user_id, "chunks")
-        chunks_storage = ChromaCloudStorage(chunks_collection)
-        doc_ids, failed_count = await chunks_storage.store_chunks(
-            chunks=chunks,
-            embeddings=chunk_embeddings,
-            content_id=content_id,
-            user_id=user_id,
-            tags=tags,
-            source_url=source_url,
-            source_type=source_type,
-        )
+            if not embeddings:
+                raise ValueError("Embedding generation failed for summary")
 
-        if failed_count > 0:
-            raise ValueError(f"Failed to store {failed_count} chunks in Chroma")
+            chunk_embeddings = []
+            summary_embedding = embeddings[0]
+            doc_ids = []
+
+        # Step 3: Store chunks in Chroma (only if chunks exist)
+        if should_chunk and chunks:
+            chunks_collection = get_user_collection(user_id, "chunks")
+            chunks_storage = ChromaCloudStorage(chunks_collection)
+            doc_ids, failed_count = await chunks_storage.store_chunks(
+                chunks=chunks,
+                embeddings=chunk_embeddings,
+                content_id=content_id,
+                user_id=user_id,
+                tags=tags,
+                source_url=source_url,
+                source_type=source_type,
+            )
+
+            if failed_count > 0:
+                raise ValueError(f"Failed to store {failed_count} chunks in Chroma")
+        else:
+            doc_ids = []
 
         # Step 4: Store summary in Chroma
         summaries_collection = get_user_collection(user_id, "summaries")

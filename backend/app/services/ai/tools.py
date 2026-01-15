@@ -96,31 +96,24 @@ class Tools:
                 }
 
             content_ids = [r.content_id for r in results]
+            logger.info(f"[TOOLS] Found {len(content_ids)} content IDs: {content_ids}")
+            print(f"[TOOLS] 🔍 Found content IDs: {content_ids}")
 
             # Fetch content details
             def _fetch_content():
                 supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
                 supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-                if not supabase_url or not supabase_key:
-                    logger.error("[TOOLS] Missing Supabase credentials")
-                    return []
 
-                supabase = create_client(supabase_url, supabase_key)
+                try:
+                    supabase = create_client(supabase_url, supabase_key)
+                    
 
-                # Fetch content and related tags
-                response = (
-                    supabase.table("content")
-                    .select("*, content_tags(tags(tag_name))")
-                    .in_("contentid", content_ids)
-                    .execute()
-                )
-                return response.data
 
             content_details = await asyncio.to_thread(_fetch_content)
 
             if not content_details:
                 return {
-                    "text": "Found matching content IDs but couldn't fetch details.",
+                    "text": f"I found {len(content_ids)} potential matches in the search index, but I couldn't retrieve their details from the database. These items might have been deleted recently.",
                     "content_references": [],
                 }
 
@@ -209,7 +202,8 @@ class Tools:
             Formatted tool descriptions string
         """
         return """Available tools:
-1. web_search: Search the web using DuckDuckGo. Input: search query string.
-2. search_knowledge_base: Search the user's saved content. Input: search query string.
-3. ask_user_permission: Request permission from user. Input: reason string.
-4. final_answer: Provide the final response. Input: your complete answer."""
+1. search_knowledge_base: Search the user's saved content. Input: search query string. ALWAYS USE THIS FIRST - no permission needed, this is the user's own content.
+2. web_search: Search the web using DuckDuckGo. Input: search query string. Only use if knowledge base has no relevant results.
+3. final_answer: Provide the final response. Input: your complete answer.
+
+IMPORTANT: For questions about user's content, ALWAYS use search_knowledge_base directly - never ask for permission."""

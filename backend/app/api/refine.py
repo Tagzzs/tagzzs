@@ -670,7 +670,7 @@ async def extract_and_refine_pdf(request: PDFExtractionRequest):
         from app.services.extractors.pdf.orchestrator import (
             extract_pdf_content_orchestrated,
         )
-        from app.services.refiners.refinement_pipeline import (
+        from app.pipelines.refinement_pipeline import (
             process_extracted_content,
             RefinementConfig,
         )
@@ -725,7 +725,7 @@ async def extract_and_refine_image(request: ImageExtractionRequest):
     """Complete pipeline: Extract image → Summarize → Tag"""
     try:
         from app.clients.image_engine import get_image_engine
-        from app.services.refiners.refinement_pipeline import (
+        from app.pipelines.refinement_pipeline import (
             process_extracted_content,
             RefinementConfig,
         )
@@ -757,6 +757,7 @@ async def extract_and_refine_image(request: ImageExtractionRequest):
                 original_text_length=len(content),
                 word_count=len(content.split()),
                 raw_content=content,
+                thumbnail_url=str(request.url),
             )
         else:
             # Vision only path
@@ -780,6 +781,7 @@ async def extract_and_refine_image(request: ImageExtractionRequest):
                 original_text_length=0,
                 word_count=0,
                 raw_content="",
+                thumbnail_url=str(request.url),
             )
 
     except Exception as e:
