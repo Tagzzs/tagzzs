@@ -268,6 +268,7 @@ async def get_user_tags(
                     "tagColor": tag["color_code"],
                     "description": tag["description"],
                     "contentCount": usage,
+                    "parentId": tag.get("parent_id"),
                     "createdAt": tag["created_at"],
                     "updatedAt": tag["updated_at"],
                 }
@@ -289,6 +290,7 @@ async def get_user_tags(
                 "tagColor": tag["color_code"],
                 "description": tag["description"],
                 "contentCount": usage,
+                "parentId": tag.get("parent_id"),
                 "createdAt": tag["created_at"],
                 "updatedAt": tag["updated_at"],
             })

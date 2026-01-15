@@ -1,12 +1,8 @@
-"use client";
+'use client';
 
-import type React from "react";
-
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset } from "@/components/ui/sidebar";
-import { DashboardNavbar } from "@/components/dashboard-navbar";
-import AuthGuard from "@/components/auth-guard";
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/layout/Sidebar';
+import AuthGuard from '@/components/auth-guard';
 
 export default function DashboardLayout({
   children,
@@ -15,12 +11,15 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthGuard>
-      <SidebarProvider>
+      <SidebarProvider
+        defaultOpen={false}
+        className="flex h-screen w-full selection:bg-[#9F55FF]/30 selection:text-white bg-black overflow-hidden"
+        style={{
+          "--sidebar-width-icon": "4.5rem"
+        } as React.CSSProperties}
+      >
         <AppSidebar />
-        <SidebarInset className="border-0 rounded-none shadow-none m-0 md:m-0">
-          <DashboardNavbar />
-          <div className="flex flex-1 flex-col gap-0">{children}</div>
-        </SidebarInset>
+        {children}
       </SidebarProvider>
     </AuthGuard>
   );

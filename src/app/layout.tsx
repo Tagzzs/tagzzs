@@ -2,10 +2,14 @@ import type React from "react";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
 import AuthProvider from "../contexts/AuthContext";
+import ChatProvider from "../contexts/ChatContext";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -91,15 +95,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#A064FF" />
+      </head>
+      <body className={`${inter.variable} antialiased bg-black overflow-hidden`}>
         <AuthProvider>
-          <ThemeProvider
-            attribute="class"
-            forcedTheme="light"
-            disableTransitionOnChange
-          >
+          <ChatProvider>
             {children}
-          </ThemeProvider>
+          </ChatProvider>
         </AuthProvider>
       </body>
     </html>

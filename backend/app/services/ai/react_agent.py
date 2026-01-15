@@ -47,6 +47,9 @@ SYSTEM_PROMPT = """You are a ReAct Agent. You have access to tools to help answe
 ## Important:
 - Think step by step about what tool to use.
 - After using a tool, you will see the result and can decide next steps.
+- ALWAYS start by using search_knowledge_base to check the user's saved content first.
+- You do NOT need permission to search the user's knowledge base - it's their own saved content.
+- Only use ask_user_permission for web_search if you need to search the internet.
 - If web_search fails, try search_knowledge_base or rephrase your query.
 - Always provide a final_answer when you have enough information.
 - Do NOT include any text before or after the JSON object.

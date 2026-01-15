@@ -9,6 +9,12 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter(prefix="/health", tags=["health"])
 
 
+@router.get("/")
+async def health_check():
+    """General health check"""
+    return {"status": "ok", "message": "Backend is healthy"}
+
+
 @router.get("/image")
 async def check_image_extraction_health():
     """Check health status of the image extraction pipeline"""

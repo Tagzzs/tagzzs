@@ -1,0 +1,277 @@
+/* Neural Graph Specific Styles - Exact match to NewNeuralMap.html */
+
+/* Canvas */
+#neural-canvas {
+    display: block;
+    width: 100%;
+    height: 100vh;
+    cursor: grab;
+    background: radial-gradient(circle at center, #1e1e24 0%, #000000 120%);
+}
+
+#neural-canvas:active {
+    cursor: grabbing;
+}
+
+/* --- DETAIL OVERLAY WITH AUTO-SIZING --- */
+#detail-view-layer {
+    transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.98) translateY(10px);
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 45;
+}
+
+#detail-view-layer.active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1) translateY(0);
+}
+
+/* Dynamic Sizing Classes applied by JS */
+#detail-view-layer.push-left {
+    left: 16rem;
+    /* w-64 */
+}
+
+#detail-view-layer.push-right {
+    right: 20rem;
+    /* w-80 */
+}
+
+/* Sidebars */
+.sidebar-panel {
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(12px);
+    transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+    z-index: 50;
+}
+
+/* Left Explorer Panel */
+.left-panel {
+    transform: translateX(-100%);
+    border-right: 1px solid #27272a;
+}
+
+.left-panel.active {
+    transform: translateX(0);
+}
+
+/* Right Details Panel */
+.right-panel {
+    transform: translateX(100%);
+    border-left: 1px solid #27272a;
+}
+
+.right-panel.active {
+    transform: translateX(0);
+}
+
+/* --- NESTED TREE STYLES --- */
+.tree-group {
+    margin-bottom: 2px;
+}
+
+.tree-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.tree-header:hover {
+    background: #18181b;
+    color: #fff;
+}
+
+.tree-arrow {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #52525b;
+    transition: transform 0.2s;
+}
+
+.tree-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #a1a1aa;
+    flex: 1;
+}
+
+.tree-children {
+    margin-left: 11px;
+    padding-left: 11px;
+    border-left: 1px solid #27272a;
+    display: none;
+}
+
+.tree-children.open {
+    display: block;
+}
+
+/* Level Colors in Tree */
+.lvl-cat>.tree-header .tree-label {
+    color: #A78BFA;
+    font-weight: 600;
+}
+
+.lvl-sub>.tree-header .tree-label {
+    color: #60A5FA;
+}
+
+.lvl-item {
+    padding: 4px 8px 4px 12px;
+    font-size: 12px;
+    color: #71717a;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.lvl-item:hover,
+.lvl-item.active-item {
+    color: #22D3EE;
+    background: rgba(34, 211, 238, 0.1);
+}
+
+.lvl-item::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #22D3EE;
+    opacity: 0.5;
+}
+
+/* --- FLOATING / DOCKING SEARCH BAR ANIMATIONS --- */
+#floating-controls {
+    position: absolute;
+    z-index: 60;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 42rem;
+    padding: 0 1rem;
+    transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+#floating-controls.docked {
+    bottom: 0;
+    left: 100%;
+    transform: translateX(-100%);
+    width: 20rem;
+    max-width: 20rem;
+    padding: 0 1rem;
+    background: transparent;
+    border-top: none;
+    pointer-events: none; /* Let clicks pass through if needed, but inner elements need pointer-events: auto */
+}
+
+#floating-controls.docked .floating-bar {
+    pointer-events: auto;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    height: 3.5rem;
+    padding-right: 0;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+}
+
+#floating-controls.docked .add-btn {
+    border-radius: 4px;
+    height: 2rem;
+    padding: 0 0.75rem;
+    margin-right: 1rem;
+    font-size: 0.875rem; /* Reset font size if needed, assuming default ~14px/sm */
+    background: #ffffff;
+    color: #000000;
+}
+
+.floating-bar {
+    background: rgba(18, 18, 18, 0.6);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* Graph Styles */
+#ai-graph-svg {
+    overflow: visible;
+}
+
+.center-pulse {
+    animation: pulse-node 3s infinite;
+}
+
+@keyframes pulse-node {
+    0% {
+        stroke-width: 2px;
+        stroke-opacity: 0.3;
+        stroke: #ffffff;
+    }
+
+    50% {
+        stroke-width: 6px;
+        stroke-opacity: 0.1;
+        stroke: #ffffff;
+    }
+
+    100% {
+        stroke-width: 2px;
+        stroke-opacity: 0.3;
+        stroke: #ffffff;
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+}

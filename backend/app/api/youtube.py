@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from app.services.token_verifier import get_current_user
+from app.api.dependencies import get_current_user
 from app.utils.supabase.supabase_client import supabase
 
 router = APIRouter(prefix="/youtube", tags=["YouTube Extraction"])
@@ -197,11 +197,29 @@ async def list_youtube_queue(
         # Auto-cleanup older than 7 days
         try:
             seven_days_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
-            supabase.table("extraction_queue") \
-                .delete() \
+            
+            # 1. Find old IDs
+            old_items = supabase.table("extraction_queue") \
+                .select("id") \
                 .eq("user_id", user_id) \
                 .lt("created_at", seven_days_ago) \
                 .execute()
+                
+            if old_items.data:
+                old_ids = [item['id'] for item in old_items.data]
+                if old_ids:
+                    # 2. Delete from results first (manually cascading)
+                    supabase.table("extraction_results") \
+                        .delete() \
+                        .in_("queue_id", old_ids) \
+                        .execute()
+                        
+                    # 3. Delete from queue
+                    supabase.table("extraction_queue") \
+                        .delete() \
+                        .in_("id", old_ids) \
+                        .execute()
+                    print(f"Cleaned up {len(old_ids)} expired drafts")
         except Exception as cleanup_error:
             print(f"Cleanup error (non-fatal): {cleanup_error}")
 
