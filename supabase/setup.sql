@@ -818,10 +818,8 @@ USING (true);
 
 INSERT INTO credit_pricing (feature, cost) VALUES
 ('capture', 5),
-('graph', 10),
-('database', 3),
-('kai_ai', 15),
-('youtube_extract', 20)
+('kai_ai', 1),
+('youtube_extract', 10)
 ON CONFLICT (feature) DO UPDATE
 SET cost = EXCLUDED.cost;
 
