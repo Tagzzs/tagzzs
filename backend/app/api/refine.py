@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from fastapi.responses import JSONResponse
 from app.api.dependencies import get_current_user
 from app.utils.supabase.auth import create_auth_error
+from app.services.credit_service import CreditService, CreditError
 
 router = APIRouter(tags=["refinement"])
 
@@ -385,8 +386,11 @@ async def extract_and_refine_auto(
         ]
         is_youtube = any(domain in url_lower for domain in youtube_domains)
 
+        feature='capture'
+
         if is_youtube:
             content_type = "youtube"
+            feature = "youtube_extract"
         elif url_lower.endswith(".pdf"):
             content_type = "pdf"
         elif any(
@@ -396,6 +400,17 @@ async def extract_and_refine_auto(
             content_type = "image"
         else:
             content_type = "website"
+
+        credit_ledger_metadata = {"url": url,
+                                  "reason": "Capture Content",
+                                  "description": "Capturing content worth 5 credits per use"} # Can update later
+        request_id = str(uuid.uuid4())
+        await CreditService.deduct(
+            user_id=current_user["id"],
+            feature=feature,
+            request_id=request_id,
+            metadata=credit_ledger_metadata
+        )
 
         # Route to appropriate extractor
         if content_type == "youtube":
@@ -583,6 +598,10 @@ async def extract_and_refine_auto(
                 raw_content=body_text,
             )
 
+    except CreditError:
+        raise HTTPException(
+            status_code=402, detail="Insufficient Credits"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Auto extract-refine pipeline failed: {str(e)}"
