@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useExtraction } from "@/hooks/useExtraction";
 import { useTags, Tag } from "@/hooks/useTags";
 import { useToast } from "@/hooks/use-toast";
+import { CreditBalanceDisplay } from "@/components/CreditBalanceDisplay";
 
 interface QuickCaptureModalProps {
   isOpen: boolean;
@@ -540,6 +541,8 @@ export function QuickCaptureModal({ isOpen, onClose }: QuickCaptureModalProps) {
                     Let's start organizing
                   </p>
                 </div>
+              <div className="flex items-center gap-3">
+                <CreditBalanceDisplay compact />
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -548,6 +551,7 @@ export function QuickCaptureModal({ isOpen, onClose }: QuickCaptureModalProps) {
                 >
                   <X className="w-5 h-5" />
                 </motion.button>
+              </div>
               </div>
             </div>
 

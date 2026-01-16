@@ -1,8 +1,46 @@
 import React, { useEffect, useRef } from 'react';
 
+// Particle system
+class Particle {
+  x: number;
+  y: number;
+  baseX: number;
+  baseY: number;
+  radius: number;
+  angle: number;
+  distance: number;
+  speed: number;
+  opacity: number;
+
+  constructor(centerX: number, centerY: number, index: number, total: number) {
+    this.angle = (index / total) * Math.PI * 2;
+    this.distance = 80 + Math.random() * 120;
+    this.baseX = centerX;
+    this.baseY = centerY;
+    this.x = centerX + Math.cos(this.angle) * this.distance;
+    this.y = centerY + Math.sin(this.angle) * this.distance;
+    this.radius = 1 + Math.random() * 2;
+    this.speed = 0.0005 + Math.random() * 0.001;
+    this.opacity = 0.3 + Math.random() * 0.7;
+  }
+
+  update(rotation: number) {
+    const currentAngle = this.angle + rotation;
+    this.x = this.baseX + Math.cos(currentAngle) * this.distance;
+    this.y = this.baseY + Math.sin(currentAngle) * this.distance;
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(168, 85, 247, ${this.opacity})`;
+    ctx.fill();
+  }
+}
+
 export function AnimatedBrandPanel() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);
   const rotationRef = useRef(0);
 
@@ -26,44 +64,6 @@ export function AnimatedBrandPanel() {
 
     updateCanvasSize();
     window.addEventListener('resize', updateCanvasSize);
-
-    // Particle system
-    class Particle {
-      x: number;
-      y: number;
-      baseX: number;
-      baseY: number;
-      radius: number;
-      angle: number;
-      distance: number;
-      speed: number;
-      opacity: number;
-
-      constructor(centerX: number, centerY: number, index: number, total: number) {
-        this.angle = (index / total) * Math.PI * 2;
-        this.distance = 80 + Math.random() * 120;
-        this.baseX = centerX;
-        this.baseY = centerY;
-        this.x = centerX + Math.cos(this.angle) * this.distance;
-        this.y = centerY + Math.sin(this.angle) * this.distance;
-        this.radius = 1 + Math.random() * 2;
-        this.speed = 0.0005 + Math.random() * 0.001;
-        this.opacity = 0.3 + Math.random() * 0.7;
-      }
-
-      update(rotation: number) {
-        const currentAngle = this.angle + rotation;
-        this.x = this.baseX + Math.cos(currentAngle) * this.distance;
-        this.y = this.baseY + Math.sin(currentAngle) * this.distance;
-      }
-
-      draw(ctx: CanvasRenderingContext2D) {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(168, 85, 247, ${this.opacity})`;
-        ctx.fill();
-      }
-    }
 
     // Initialize particles
     const initParticles = () => {

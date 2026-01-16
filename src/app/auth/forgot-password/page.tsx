@@ -22,8 +22,8 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleResetPassword = async (emailVal: string) => {
+    // emailVal is passed from the form
     setIsLoading(true);
     setError("");
 
@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: emailVal }),
       });
 
       const data = await response.json();

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuthFlow } from './auth/AuthFlow';
+import { AuthFlow } from './AuthFlow';
 
 export function AuthDemo() {
   const [showAuth, setShowAuth] = useState(true);
@@ -38,7 +38,7 @@ export function AuthDemo() {
 
   return (
     <div className={`transition-opacity duration-1000 ${authCompleted ? 'opacity-0' : 'opacity-100'}`}>
-      <AuthFlow onComplete={handleAuthComplete} skipSplash={false} />
+      <AuthFlow onAuthComplete={handleAuthComplete} skipSplash={false} />
     </div>
   );
 }

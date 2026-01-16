@@ -4,6 +4,7 @@ import React from 'react';
 import NanobotSphere from './NanobotSphere';
 import { X } from '@phosphor-icons/react';
 import { useChat, ChatMessage } from '@/contexts/ChatContext';
+import { CreditBalanceDisplay } from '@/components/CreditBalanceDisplay';
 
 interface NeuralRightPanelProps {
     rightPanelRef: React.RefObject<HTMLDivElement | null>;
@@ -35,6 +36,10 @@ export default function NeuralRightPanel({
             <div className="flex-1 flex flex-col p-0 pt-14 overflow-hidden bg-black relative">
                 <div className="w-full h-40 relative shrink-0 flex items-center justify-center bg-gradient-to-b from-black to-zinc-900/10">
                     <NanobotSphere className="w-full h-full object-cover opacity-90" />
+                    {/* Credit Balance */}
+                    <div className="absolute top-1 left-4 z-20">
+                        <CreditBalanceDisplay compact />
+                    </div>
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-4 p-5 pt-0 pb-4" id="chat-history">
                     {chatMessages.length === 0 && (

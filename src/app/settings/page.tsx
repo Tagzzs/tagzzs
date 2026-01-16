@@ -9,6 +9,7 @@ import { ToggleRow } from '@/components/settings/ToggleRow';
 import { toast } from 'sonner';
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import { refreshCreditBalance } from "@/hooks/useCreditBalance";
 
 export default function SettingsPage() {
   const { user, signOut, loading, checkAuth } = useAuth();
@@ -79,9 +80,6 @@ export default function SettingsPage() {
       setIsDeleteModalOpen(false);
     }
   };
-
-
-
 
   // Security state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -204,6 +202,8 @@ export default function SettingsPage() {
       } else {
         setPromoCode('');
         toast.success(data.message || 'Promo code redeemed successfully');
+        // Refresh credit balance after successful promo code redemption
+        refreshCreditBalance();
       }
     } catch (error) {
       console.error('Redeem promo code error:', error);

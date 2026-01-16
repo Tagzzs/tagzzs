@@ -5,6 +5,7 @@ import { X, Plus, Sparkle } from '@phosphor-icons/react';
 import NanobotSphere from '@/app/neural-graph/components/NanobotSphere';
 import { useChat } from '@/contexts/ChatContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { CreditBalanceDisplay } from '@/components/CreditBalanceDisplay';
 
 interface KaiAISidebarProps {
     isOpen: boolean;
@@ -90,6 +91,10 @@ export default function KaiAISidebar({ isOpen, onClose }: KaiAISidebarProps) {
                     >
                         <Plus weight="bold" size={10} /> New
                     </button>
+                    {/* Credit Balance */}
+                    <div className="absolute top-12 left-4 z-20">
+                        <CreditBalanceDisplay compact />
+                    </div>
                 </div>
 
                 {/* Messages */}
