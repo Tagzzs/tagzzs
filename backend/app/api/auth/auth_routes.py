@@ -601,9 +601,20 @@ async def delete_account(
             print(f"Failed to cleanup avatar storage: {storage_error}")
 
         # 2. Delete from public.users table
+        admin_supabase.table("promo_code_usage").delete().eq("userid", user_id).execute()
+        
+        # 3. Delete from other likely dependent tables (manually to be safe)
+        try:
+            admin_supabase.table("messages").delete().eq("userid", user_id).execute()
+            admin_supabase.table("conversations").delete().eq("userid", user_id).execute()
+            admin_supabase.table("content").delete().eq("userid", user_id).execute()
+        except Exception as dep_error:
+            print(f"Warning during dependency cleanup: {dep_error}")
+
+        # 4. Delete from public.users table
         admin_supabase.table("users").delete().eq("userid", user_id).execute()
 
-        # 2. Delete from Supabase Auth (admin_delete_user)
+        # 5. Delete from Supabase Auth (admin_delete_user)
         # This is critical to actually remove the account login
         admin_supabase.auth.admin.delete_user(user_id)
 
