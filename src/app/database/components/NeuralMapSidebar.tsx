@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import { Sparkle } from "@phosphor-icons/react";
 import { useChat } from "@/contexts/ChatContext";
+import { CreditBalanceDisplay } from "@/components/CreditBalanceDisplay";
 
 interface NeuralMapSidebarProps {
   currentFilter: string;
@@ -133,6 +134,10 @@ export default function NeuralMapSidebar({
             ref={nanobotRef}
             className="w-full h-full object-cover opacity-90"
           ></canvas>
+          {/* Credit Balance */}
+          <div className="absolute top-2 left-4 z-20">
+            <CreditBalanceDisplay compact />
+          </div>
         </div>
         <div
           ref={chatContainerRef}

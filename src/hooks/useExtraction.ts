@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { refreshCreditBalance } from '@/hooks/useCreditBalance';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
@@ -54,7 +55,10 @@ export function useExtraction() {
         throw new Error(errorData.detail || 'Extraction failed');
       }
 
-      return await response.json();
+      const result = await response.json();
+      // Refresh credit balance after successful extraction
+      refreshCreditBalance();
+      return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Extraction failed';
       setError(message);
@@ -117,7 +121,10 @@ export function useExtraction() {
         throw new Error('Content extraction failed');
       }
 
-      return await extractResponse.json();
+      const result = await extractResponse.json();
+      // Refresh credit balance after successful extraction
+      refreshCreditBalance();
+      return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Extraction failed';
       setError(message);

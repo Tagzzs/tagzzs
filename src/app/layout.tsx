@@ -5,6 +5,8 @@ import "./globals.css";
 import AuthProvider from "../contexts/AuthContext";
 import ChatProvider from "../contexts/ChatContext";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "sonner";
+
 
 const inter = Inter({
   variable: "--font-inter",
@@ -105,6 +107,17 @@ export default function RootLayout({
           <ChatProvider>
             {children}
             <Toaster />
+            <SonnerToaster 
+              theme="dark" 
+              position="top-right"
+              toastOptions={{
+                style: {
+                  background: '#0a0a0a',
+                  border: '1px solid #2a2a2a',
+                  color: '#fff',
+                },
+              }}
+            />
           </ChatProvider>
         </AuthProvider>
       </body>

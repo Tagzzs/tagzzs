@@ -24,8 +24,8 @@ export default function SignInPage() {
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignIn = async (emailVal: string, passwordVal: string) => {
+    // emailVal and passwordVal are passed from the form
     setIsLoading(true);
     setErrors({});
 
@@ -34,7 +34,7 @@ export default function SignInPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: emailVal, password: passwordVal }),
       });
 
       const data = await response.json();
@@ -53,9 +53,15 @@ export default function SignInPage() {
            setErrors(newErrors);
         } else {
              // Generic error
+             // Extract error message safely
+             let errorMessage = "Invalid email or password";
+             if (data.error?.message) errorMessage = data.error.message;
+             else if (data.detail?.error?.message) errorMessage = data.detail.error.message;
+             else if (typeof data.detail === 'string') errorMessage = data.detail;
+
              toast({
                title: "Sign In Failed",
-               description: data.error?.message || data.detail || "Invalid email or password",
+               description: errorMessage,
                variant: "destructive",
              });
         }

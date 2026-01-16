@@ -53,6 +53,9 @@ export function useAuthenticatedApi() {
         
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
         
+        // Extract error message from various response formats
+        const errorMessage = errorData.detail || errorData.error?.message || errorData.error || errorData.message || `HTTP ${response.status}`;
+        
         if (response.status === 401) {
           toast({
             title: 'Session Expired',
@@ -62,7 +65,17 @@ export function useAuthenticatedApi() {
           throw new Error('Authentication expired')
         }
 
-        throw new Error(errorData.error || `HTTP ${response.status}`)
+        // Handle insufficient credits error (402)
+        if (response.status === 402) {
+          toast({
+            title: 'Insufficient Credits',
+            description: 'You don\'t have enough credits for this action. Please add more credits to continue.',
+            variant: 'destructive',
+          })
+          throw new Error('Insufficient credits')
+        }
+
+        throw new Error(errorMessage)
       }
 
       return await response.json()

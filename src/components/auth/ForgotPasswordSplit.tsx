@@ -6,7 +6,7 @@ import { AuthDivider } from './AuthDivider';
 
 interface ForgotPasswordSplitProps {
   onBack?: () => void;
-  onResetPassword?: (e: React.FormEvent) => void;
+  onResetPassword?: (email: string) => void;
   loading?: boolean;
   error?: string;
   success?: boolean;
@@ -51,7 +51,7 @@ export function ForgotPasswordSplit({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
-    onResetPassword?.(e);
+    onResetPassword?.(currentEmail);
   };
 
   const displayError = localError || error;

@@ -27,8 +27,8 @@ export default function SignUpPage() {
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignUp = async (nameVal: string, emailVal: string, passwordVal: string) => {
+    // nameVal, emailVal, passwordVal are passed from the form
     setIsLoading(true);
     setErrors({});
 
@@ -38,9 +38,9 @@ export default function SignUpPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ 
-          email, 
-          password,
-          name,
+          email: emailVal, 
+          password: passwordVal,
+          name: nameVal,
           confirmPassword,
           promo_code: promoCode.toUpperCase(),
         }),
@@ -49,6 +49,18 @@ export default function SignUpPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Handle User Already Exists specifically
+        if (data.detail?.error?.code === "USER_EXISTS") {
+             toast({
+               title: "Account already exists",
+               description: "This email is already registered. Redirecting to sign in...",
+               variant: "default",
+             });
+             setTimeout(() => router.push("/auth/sign-in"), 2000);
+             setIsLoading(false);
+             return;
+        }
+
         if (data.error?.details) {
           setErrors(data.error.details);
         } else if (data.detail && Array.isArray(data.detail)) {
@@ -60,9 +72,15 @@ export default function SignUpPage() {
            });
            setErrors(newErrors);
         } else {
+             // Extract error message safely
+             let errorMessage = "Failed to create account";
+             if (data.error?.message) errorMessage = data.error.message;
+             else if (data.detail?.error?.message) errorMessage = data.detail.error.message;
+             else if (typeof data.detail === 'string') errorMessage = data.detail;
+
              toast({
                title: "Sign Up Failed",
-               description: data.error?.message || data.detail || "Failed to create account",
+               description: errorMessage,
                variant: "destructive",
              });
         }

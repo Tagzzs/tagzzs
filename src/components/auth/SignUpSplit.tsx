@@ -7,8 +7,8 @@ import { AuthDivider } from './AuthDivider';
 
 interface SignUpSplitProps {
   onSignIn?: () => void;
-  onSignUp?: (e: React.FormEvent) => void;
-  onSocialAuth?: () => void;
+  onSignUp?: (name: string, email: string, password: string) => void;
+  onSocialAuth?: (provider: 'google' | 'github') => void;
   loading?: boolean;
   errors?: Record<string, string[]>;
   name?: string;
@@ -107,7 +107,7 @@ export function SignUpSplit({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
-    onSignUp?.(e);
+    onSignUp?.(currentName, currentEmail, currentPassword);
   };
 
   const getError = (field: string) => {
@@ -140,7 +140,7 @@ export function SignUpSplit({
       <div className="space-y-3 mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100">
         <SocialButton
           provider="google"
-          onClick={onSocialAuth}
+          onClick={() => onSocialAuth?.('google')}
         />
         {/* Github removed */}
       </div>

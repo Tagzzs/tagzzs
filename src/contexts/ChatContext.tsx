@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useAuth } from "./AuthContext";
 import { useAuthenticatedApi } from "@/hooks/use-authenticated-api";
+import { refreshCreditBalance } from "@/hooks/useCreditBalance";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -226,6 +227,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
         // Save to backend
         await saveChat(finalMessages, chatId);
+
+        // Refresh credit balance after successful AI response
+        refreshCreditBalance();
       } catch (error) {
         console.error("[ChatContext] 🔴 Chat error:", error);
         setIsSending(false);
