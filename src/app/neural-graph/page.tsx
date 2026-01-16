@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import "./neural.css";
 
 // Hooks
@@ -70,6 +71,7 @@ export default function NeuralGraphPage() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [inputValue, setInputValue] = useState("");
   const [quickCaptureModalOpen, setQuickCaptureModalOpen] = useState(false);
+  const router = useRouter(); // Initialize router
 
   // Use shared chat context
   const {
@@ -163,6 +165,11 @@ export default function NeuralGraphPage() {
   };
 
   const selectNode = (node: GraphNode) => {
+    if (node.type === "content" && node.data?.contentId) {
+      router.push(`/content/${node.data.contentId}?source=neural-graph`);
+      return;
+    }
+
     setSelectedNode(node);
     isFocusedRef.current = true;
     zoomRef.current = 2.0;
@@ -184,30 +191,6 @@ export default function NeuralGraphPage() {
     if (node.type === "category") {
       const idx = deepData.findIndex((c) => c.name === node.label);
       if (idx >= 0) toggleGroup(`cat-${idx}`, true);
-    } else if (node.type === "content") {
-      openDetailView(node);
-
-      // Auto-expand tree to show item
-      let catIdx = -1,
-        subIdx = -1;
-      deepData.forEach((cat, i) => {
-        cat.subs.forEach((sub, j) => {
-          if (sub.items.some((item) => item.name === node.label)) {
-            catIdx = i;
-            subIdx = j;
-          }
-        });
-      });
-
-      if (catIdx !== -1) {
-        // Exclusively expand the path to this node
-        setExpandedGroups(
-          new Set([
-            `cat-${catIdx}`,
-            ...(subIdx !== -1 ? [`sub-${catIdx}-${subIdx}`] : []),
-          ])
-        );
-      }
     }
   };
 

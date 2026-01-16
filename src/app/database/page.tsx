@@ -24,6 +24,7 @@ import { QuickCaptureModal } from "@/components/modals/QuickCaptureModal";
 // Hooks
 import { useContent } from "@/hooks/useContent";
 import { useTags } from "@/hooks/useTags";
+import { useAuthenticatedApi } from "@/hooks/use-authenticated-api";
 
 // Utilities
 import {
@@ -43,11 +44,87 @@ function DatabasePageContent() {
   const { content, loading: contentLoading } = useContent();
   const { tagTree, tagsMap, loading: tagsLoading } = useTags();
 
-  // Build tree structure from real data
+  const [searchQuery, setSearchQuery] = useState("");
+  // We'll derive filtering directly in the treeData useMemo for instant results
+
+  // Build tree structure from real data using either all content or searched content
   const treeData = useMemo(() => {
     if (contentLoading || tagsLoading) return [];
-    return buildTreeData(tagTree, content, tagsMap);
-  }, [tagTree, content, tagsMap, contentLoading, tagsLoading]);
+    
+    let itemsToBuild = content;
+    
+    // Client-side filtering
+    if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        
+        // Calculate relevance score for each item
+        const scoredItems = content.map(item => {
+            let score = 0;
+            const title = item.title?.toLowerCase() || "";
+            const desc = item.description?.toLowerCase() || "";
+            
+            // Title matches
+            if (title === query) score += 50;
+            else if (title.includes(query)) score += 20;
+            
+            // Description matches
+            if (desc.includes(query)) score += 5;
+            
+            // Tag matches - Weighted heavily to prioritize tag naming
+            if (item.tagsId) {
+                for (const tagId of item.tagsId) {
+                    const tag = tagsMap.get(tagId);
+                    if (tag) {
+                        const tagName = tag.tagName.toLowerCase();
+                        if (tagName === query) score += 100; // Exact tag match gets highest priority
+                        else if (tagName.includes(query)) score += 30;
+                    }
+                }
+            }
+            
+            return { item, score };
+        });
+
+        // Filter and sort
+        itemsToBuild = scoredItems
+            .filter(entry => entry.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map(entry => entry.item);
+    }
+    
+    const result = buildTreeData(tagTree, itemsToBuild, tagsMap);
+
+    // If searching, sort the categories (columns) to prioritize matches to the query
+    if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        result.sort((a, b) => {
+            const aName = a.name.toLowerCase();
+            const bName = b.name.toLowerCase();
+            
+            // Priority 1: Exact match with query
+            const aExact = aName === query ? 1 : 0;
+            const bExact = bName === query ? 1 : 0;
+            if (aExact !== bExact) return bExact - aExact;
+            
+            // Priority 2: Starts with query
+            const aStart = aName.startsWith(query) ? 1 : 0;
+            const bStart = bName.startsWith(query) ? 1 : 0;
+            if (aStart !== bStart) return bStart - aStart;
+            
+            // Priority 3: Contains query
+            const aContains = aName.includes(query) ? 1 : 0;
+            const bContains = bName.includes(query) ? 1 : 0;
+            if (aContains !== bContains) return bContains - aContains;
+
+            // Priority 4: Relevance of items inside? (Optional, skipping for now to keep it stable)
+            
+            return 0;
+        });
+    }
+
+    return result;
+  }, [tagTree, content, tagsMap, contentLoading, tagsLoading, searchQuery]);
+
 
   // Get all items for count
   const allItems = useMemo(() => getAllItemsFromTree(treeData), [treeData]);
@@ -82,7 +159,16 @@ function DatabasePageContent() {
       setKanbanExpandedSubs(allSubs);
     }
   }, [treeData]);
+  
+  // Handle Instant Search from Floating Bar
+  const handleSearchInput = (query: string) => {
+      setSearchQuery(query);
+      if (query && currentFilter !== "All") {
+          router.push(`/database?filter=All`);
+      }
+  };
 
+  // Graph rendering logic (kept same)...
   const renderGraph = useCallback(() => {
     const svg = graphRef.current;
     if (!svg) return;
@@ -93,7 +179,6 @@ function DatabasePageContent() {
     const cx = w / 2;
     const cy = h / 2;
 
-    // Helper functions
     const createLine = (
       x1: number,
       y1: number,
@@ -245,9 +330,6 @@ function DatabasePageContent() {
 
   const handleUpdateView = useCallback(
     (name: string) => {
-      // Update URL to reflect new filter.
-      // If it's 'All', we can opt to remove the param or just set it.
-      // Setting it is explicit and fine.
       router.push(`/database?filter=${encodeURIComponent(name)}`);
     },
     [router]
@@ -263,7 +345,6 @@ function DatabasePageContent() {
 
   return (
     <div className="flex h-screen w-full bg-black text-zinc-400 font-sans overflow-hidden selection:bg-white selection:text-black relative">
-      {/* Left Sidebar (Library) */}
       <LibrarySidebar
         isSidebarOpen={isSidebarOpen}
         treeData={treeData}
@@ -284,8 +365,15 @@ function DatabasePageContent() {
           treeData={treeData}
         />
 
+        {/* Search Results Header */}
+        {searchQuery && (
+            <div className="px-6 py-2 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between">
+                <span className="text-white font-medium">Search Results for "{searchQuery}"</span>
+                <span className="text-sm text-zinc-400">{allItems.length} items found</span>
+            </div>
+        )}
+
         <div className="flex-1 relative overflow-hidden bg-black pl-6">
-          {/* Loading State */}
           {(contentLoading || tagsLoading) && (
             <div className="flex h-full items-center justify-center">
               <div className="flex flex-col items-center gap-4">
@@ -303,12 +391,21 @@ function DatabasePageContent() {
                   <span className="text-2xl">📚</span>
                 </div>
                 <h3 className="text-white font-semibold text-lg">
-                  No content yet
+                  {searchQuery ? "No matching results" : "No content yet"}
                 </h3>
                 <p className="text-zinc-500 text-sm">
-                  Add your first piece of content using the Quick Capture button
-                  on the Dashboard.
+                  {searchQuery 
+                    ? `No items found matching "${searchQuery}". Try a different term.`
+                    : "Add your first piece of content using the Quick Capture button on the Dashboard."}
                 </p>
+                {searchQuery && (
+                    <button 
+                        onClick={() => handleSearchInput("")}
+                        className="mt-2 text-indigo-400 hover:text-indigo-300 text-sm"
+                    >
+                        Clear Search
+                    </button>
+                )}
               </div>
             </div>
           )}
@@ -343,7 +440,6 @@ function DatabasePageContent() {
             )}
         </div>
 
-        {/* Floating Container (Search/AI) */}
         <FloatingSearchBar
           currentFilter={currentFilter}
           currentDetailItem={null}
@@ -352,6 +448,8 @@ function DatabasePageContent() {
           onOpenAddModal={() => setQuickCaptureModalOpen(true)}
           isAiSidebarOpen={isAiSidebarOpen}
           setAiSidebarOpen={setIsAiSidebarOpen}
+          onSearchInput={handleSearchInput}
+          searchQuery={searchQuery}
         />
       </main>
 

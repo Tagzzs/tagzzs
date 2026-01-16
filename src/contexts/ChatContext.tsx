@@ -222,11 +222,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
         const finalMessages = [...updatedMessages, aiMessage];
         setMessages(finalMessages);
+        setIsSending(false);
 
         // Save to backend
         await saveChat(finalMessages, chatId);
       } catch (error) {
         console.error("[ChatContext] 🔴 Chat error:", error);
+        setIsSending(false);
 
         // Add error message with more details
         const errorMessage: ChatMessage = {
@@ -238,8 +240,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, errorMessage]);
-      } finally {
-        setIsSending(false);
       }
     },
     [user?.id, currentChatId, messages, isSending, saveChat, api]

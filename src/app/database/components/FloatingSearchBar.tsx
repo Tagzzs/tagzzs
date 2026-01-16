@@ -30,6 +30,8 @@ interface FloatingSearchBarProps {
   onOpenAddModal: () => void;
   isAiSidebarOpen?: boolean;
   setAiSidebarOpen?: (open: boolean) => void;
+  onSearchInput?: (query: string) => void;
+  searchQuery?: string;
 }
 
 const BACKEND_URL =
@@ -43,15 +45,29 @@ export default function FloatingSearchBar({
   onOpenAddModal,
   isAiSidebarOpen,
   setAiSidebarOpen,
+  onSearchInput,
+  searchQuery,
 }: FloatingSearchBarProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { sendMessage, isSending } = useChat();
-  const [query, setQuery] = useState("");
+  const [localQuery, setLocalQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [showKaiAI, setShowKaiAI] = useState(false);
+
+  // If in DB mode, use controlled state from parent if available.
+  // If in AI mode, use local state so typing doesn't affect DB filtering.
+  const query = searchMode === "DB" && searchQuery !== undefined ? searchQuery : localQuery;
+
+  const setQuery = useCallback((val: string) => {
+      if (searchMode === "DB" && onSearchInput) {
+          onSearchInput(val);
+      } else {
+          setLocalQuery(val);
+      }
+  }, [onSearchInput, searchMode]);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -69,37 +85,8 @@ export default function FloatingSearchBar({
       await sendMessage(q);
       return;
     }
-
-    // DB mode: semantic search
-    setIsSearching(true);
-    setShowResults(true);
-
-    try {
-      const response = await fetch(`${BACKEND_URL}/search/semantic-query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          user_id: user?.id || "",
-          query,
-          limit: 10,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setResults(data.results || []);
-      } else {
-        console.error("Search failed:", response.status);
-        setResults([]);
-      }
-    } catch (err) {
-      console.error("Search error:", err);
-      setResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [query, searchMode, user?.id, sendMessage, setAiSidebarOpen]);
+    
+  }, [query, searchMode, sendMessage, setAiSidebarOpen, onSearchInput, setQuery, setShowResults, setShowKaiAI, setLocalQuery]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -116,7 +103,11 @@ export default function FloatingSearchBar({
   };
 
   const clearSearch = () => {
-    setQuery("");
+    if (searchMode === "DB" && onSearchInput) {
+        onSearchInput("");
+    } else {
+        setLocalQuery("");
+    }
     setResults([]);
     setShowResults(false);
   };

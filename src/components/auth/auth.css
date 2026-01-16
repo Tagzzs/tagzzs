@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@layer base {
+  /* Scrollbar Styles - Purple themed for premium feel */
+  .auth-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .auth-scroll::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+  }
+
+  .auth-scroll::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(139, 92, 246, 0.6) 0%, rgba(124, 58, 237, 0.4) 100%);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    transition: all 0.3s ease;
+  }
+
+  .auth-scroll::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(139, 92, 246, 0.8) 0%, rgba(124, 58, 237, 0.6) 100%);
+    border: 2px solid transparent;
+    background-clip: content-box;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+  }
+
+  .auth-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply border border-[#1a1a1a] rounded-[20px];
+  }
+
+  .hide-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .hide-scroll {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Smooth slide animations */
+  @keyframes slideInFromLeft {
+    from {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideInFromRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  /* Smooth transitions for all interactive elements */
+  .auth-interactive button,
+  .auth-interactive a,
+  .auth-interactive input,
+  .auth-interactive select,
+  .auth-interactive textarea {
+    transition: all 0.2s ease;
+  }
+
+  /* Mobile touch feedback */
+  @media (hover: none) {
+    .auth-interactive button:active,
+    .auth-interactive a:active {
+      transform: scale(0.98);
+    }
+  }
+}
