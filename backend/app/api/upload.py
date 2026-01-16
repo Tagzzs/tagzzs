@@ -88,12 +88,31 @@ async def upload_file(
             unique_file_name
         )
 
+        # If this is an avatar upload, update the user's profile
+        if fileType == "avatar":
+            try:
+                avatar_url = public_url_data if isinstance(public_url_data, str) else public_url_data.get('publicUrl', public_url_data)
+                
+                supabase.table("users").update({
+                    "avatar_url": avatar_url
+                }).eq("userid", user['id']).execute()
+                
+                # Also update Auth user metadata using admin client
+                from app.api.auth.supabase_client import get_supabase_admin
+                admin_supabase = get_supabase_admin()
+                admin_supabase.auth.admin.update_user_by_id(
+                    user['id'],
+                    {"user_metadata": {"avatar_url": avatar_url}}
+                )
+            except Exception as update_error:
+                print(f"Warning: Failed to update user avatar_url: {update_error}")
+
         return JSONResponse(
             status_code=201,
             content={
                 "success": True,
                 "fileName": unique_file_name,
-                "fileUrl": public_url_data,
+                "fileUrl": {"publicUrl": public_url_data} if isinstance(public_url_data, str) else public_url_data,
                 "fileSize": file_size,
                 "fileType": file.content_type,
                 "originalName": file.filename,
