@@ -94,11 +94,6 @@ const data = {
       url: "/kai-ai",
       icon: Sparkle,
     },
-    {
-      title: "Drafts",
-      url: "/drafts",
-      icon: FileDashed,
-    },
   ],
 };
 

@@ -19,29 +19,24 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useExtraction } from "@/hooks/useExtraction";
 import { useTags, Tag } from "@/hooks/useTags";
-import { useDrafts, DraftResult } from "@/hooks/useDrafts";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 
 interface QuickCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialData?: DraftResult | null;
 }
 
 type TabType = "url" | "database" | "document" | "ideation";
 type ViewState = "capture" | "analyzing" | "preview";
 type IdeaType = "idea" | "todo" | null;
 
-export function QuickCaptureModal({
-  isOpen,
-  onClose,
-  initialData,
-}: QuickCaptureModalProps) {
+export function QuickCaptureModal({ isOpen, onClose }: QuickCaptureModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>("url");
   const [viewState, setViewState] = useState<ViewState>("capture");
   const [selectedIdeaType, setSelectedIdeaType] = useState<IdeaType>(null);
   const [ideaContent, setIdeaContent] = useState("");
   const [urlInput, setUrlInput] = useState("");
+  const [isYouTubeLink, setIsYouTubeLink] = useState(false);
   const [metadataExpanded, setMetadataExpanded] = useState(false);
   const [todoItems, setTodoItems] = useState<
     Array<{ text: string; completed: boolean }>
@@ -71,7 +66,7 @@ export function QuickCaptureModal({
     loading: extractionLoading,
     error: extractionError,
   } = useExtraction();
-  const { queueYouTube } = useDrafts();
+  const { toast } = useToast();
 
   // Mock preview data
   const [previewData, setPreviewData] = useState({
@@ -85,32 +80,6 @@ export function QuickCaptureModal({
     contentType: "article", // default
   });
 
-  // Load initial data if provided
-  useEffect(() => {
-    if (initialData && isOpen) {
-      const data = initialData.data;
-      if (data) {
-        setPreviewData({
-          title: data.content?.title || data.metadata?.title || "",
-          description:
-            data.content?.description || data.metadata?.description || "",
-          tags: data.content?.tags || [],
-          summary: data.content?.summary || "",
-          personalNotes: "",
-          source: initialData.videoUrl || "youtube.com",
-          thumbnail: data.metadata?.thumbnailUrl || "",
-          contentType:
-            data.content?.contentType ||
-            data.metadata?.contentType ||
-            "article",
-        });
-        setRawContent(data.content?.rawContent || "");
-        if (initialData.videoUrl) setUrlInput(initialData.videoUrl);
-        setViewState("preview");
-      }
-    }
-  }, [initialData, isOpen]);
-
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
@@ -121,6 +90,7 @@ export function QuickCaptureModal({
         setSelectedIdeaType(null);
         setIdeaContent("");
         setUrlInput("");
+        setIsYouTubeLink(false);
         setMetadataExpanded(false);
         setTodoItems([]);
         setNewTodoText("");
@@ -158,14 +128,14 @@ export function QuickCaptureModal({
 
   // Accent color tokens
   const accentColors = {
-    // Primary Accent - Soft Cool Blue (#7DA7FF)
+    // Primary Accent - Soft Purple (#A78BFA)
     primary: {
-      100: "#7DA7FF",
-      70: "rgba(125, 167, 255, 0.7)",
-      60: "rgba(125, 167, 255, 0.6)",
-      55: "rgba(125, 167, 255, 0.55)",
-      40: "rgba(125, 167, 255, 0.4)",
-      25: "rgba(125, 167, 255, 0.25)",
+      100: "#A78BFA",
+      70: "rgba(167, 139, 250, 0.7)",
+      60: "rgba(167, 139, 250, 0.6)",
+      55: "rgba(167, 139, 250, 0.55)",
+      40: "rgba(167, 139, 250, 0.4)",
+      25: "rgba(167, 139, 250, 0.25)",
     },
     // Success Accent - Muted Emerald (#4ADE80)
     success: {
@@ -203,22 +173,23 @@ export function QuickCaptureModal({
       if (activeTab === "url") {
         const trimmedUrl = urlInput.trim();
         if (!trimmedUrl) {
-          toast.error("Please enter a URL");
+          toast({
+            title: "Error",
+            description: "Please enter a URL",
+            variant: "destructive",
+          });
           setViewState("capture");
           return;
         }
 
         // Check if YouTube URL
-        if (isYouTubeUrl(trimmedUrl)) {
-          const result = await queueYouTube(trimmedUrl);
-          if (result.success) {
-            toast.success("YouTube video queued for extraction!");
-            onClose();
-            router.push("/drafts");
-          } else {
-            toast.error(result.error || "Failed to queue video");
-            setViewState("capture");
-          }
+        // (Handled by input change, but double check here)
+        if (isYouTubeUrl(trimmedUrl) || isYouTubeLink) {
+          toast({
+            title: "Coming Soon",
+            description: "YouTube analysis coming soon",
+          });
+          setViewState("capture");
           return;
         }
 
@@ -230,7 +201,7 @@ export function QuickCaptureModal({
           setPreviewData({
             title: content.title || metadata.title || "Untitled",
             description: content.summary || content.description || "", // Prefer AI summary for description
-            tags: content.tags || [],
+            tags: (content.tags || []).slice(0, 2), // Limit to 2 most relevant tags
             summary: "", // Legacy field removed from UI
             personalNotes: "",
             source: new URL(trimmedUrl).hostname,
@@ -240,12 +211,20 @@ export function QuickCaptureModal({
           setRawContent(content.extracted_text || content.rawContent || "");
           setViewState("preview");
         } else {
-          toast.error(extractionError || "Extraction failed");
+          toast({
+            title: "Error",
+            description: extractionError || "Extraction failed",
+            variant: "destructive",
+          });
           setViewState("capture");
         }
       } else if (activeTab === "document") {
         if (!selectedFile) {
-          toast.error("Please select a file");
+          toast({
+            title: "Error",
+            description: "Please select a file",
+            variant: "destructive",
+          });
           setViewState("capture");
           return;
         }
@@ -257,7 +236,7 @@ export function QuickCaptureModal({
           setPreviewData({
             title: content.title || selectedFile.name || "Untitled",
             description: content.summary || content.description || "", // Prefer AI summary
-            tags: content.tags || [],
+            tags: (content.tags || []).slice(0, 2), // Limit to 2 most relevant tags
             summary: "",
             personalNotes: "",
             source: "Document",
@@ -270,12 +249,20 @@ export function QuickCaptureModal({
           }
           setViewState("preview");
         } else {
-          toast.error(extractionError || "Document extraction failed");
+          toast({
+            title: "Error",
+            description: extractionError || "Document extraction failed",
+            variant: "destructive",
+          });
           setViewState("capture");
         }
       } else if (activeTab === "ideation" && selectedIdeaType === "idea") {
         if (!ideaContent.trim()) {
-          toast.error("Please enter your idea");
+          toast({
+            title: "Error",
+            description: "Please enter your idea",
+            variant: "destructive",
+          });
           setViewState("capture");
           return;
         }
@@ -286,7 +273,10 @@ export function QuickCaptureModal({
           setPreviewData({
             title: "My Idea",
             description: ideaContent,
-            tags: [...(content.tags || []), ...ideaTags],
+            tags: [...(content.tags || []).slice(0, 2), ...ideaTags].slice(
+              0,
+              2
+            ), // Limit refined tags + manually added tags
             summary: content.summary || "",
             personalNotes: "",
             source: "Ideation",
@@ -296,7 +286,11 @@ export function QuickCaptureModal({
           setRawContent(ideaContent);
           setViewState("preview");
         } else {
-          toast.error(extractionError || "Refinement failed");
+          toast({
+            title: "Error",
+            description: extractionError || "Refinement failed",
+            variant: "destructive",
+          });
           setViewState("capture");
         }
       } else {
@@ -304,7 +298,11 @@ export function QuickCaptureModal({
         setViewState("preview");
       }
     } catch (err) {
-      toast.error("Something went wrong. Please try again.");
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
       setViewState("capture");
     }
   };
@@ -312,6 +310,14 @@ export function QuickCaptureModal({
   // Handle URL input change
   const handleUrlChange = (value: string) => {
     setUrlInput(value);
+    const isYT = isYouTubeUrl(value);
+    if (isYT && !isYouTubeLink) {
+      toast({
+        title: "Youtube",
+        description: "youtube analysis coming soon",
+      });
+    }
+    setIsYouTubeLink(isYT);
   };
 
   const handleSave = async () => {
@@ -356,7 +362,10 @@ export function QuickCaptureModal({
         throw new Error(errorData.error?.message || "Failed to save content");
       }
 
-      toast.success("Content saved successfully!");
+      toast({
+        title: "Success",
+        description: "Content saved successfully!",
+      });
       onClose();
 
       // Reset state
@@ -378,9 +387,12 @@ export function QuickCaptureModal({
         contentType: "article",
       });
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to save content"
-      );
+      toast({
+        title: "Error",
+        description:
+          err instanceof Error ? err.message : "Failed to save content",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -510,7 +522,7 @@ export function QuickCaptureModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.96, opacity: 0 }}
             transition={transitions.modal}
-            className="relative w-full max-w-[700px] max-h-[85vh] overflow-hidden rounded-[20px] bg-[#141416]/95 backdrop-blur-xl border border-white/[0.06] flex flex-col"
+            className="relative w-full max-w-[700px] max-h-[85vh] overflow-hidden rounded-[20px] bg-[#0a0a0a]/95 backdrop-blur-xl border border-white/[0.06] flex flex-col"
             onClick={(e) => e.stopPropagation()}
             style={{
               boxShadow: "0 24px 48px rgba(0,0,0,0.75)",
@@ -599,7 +611,7 @@ export function QuickCaptureModal({
                             value={urlInput}
                             onChange={(e) => handleUrlChange(e.target.value)}
                             placeholder="Paste a URL here..."
-                            className="w-full pl-14 pr-5 py-4 rounded-2xl border border-white/[0.06] bg-[#0B0B0D] text-white placeholder:text-white/45 transition-all outline-none"
+                            className="w-full pl-14 pr-5 py-4 rounded-2xl border border-white/[0.06] bg-zinc-900/50 text-white placeholder:text-white/45 transition-all outline-none"
                             style={{
                               boxShadow: "none",
                             }}
@@ -622,15 +634,13 @@ export function QuickCaptureModal({
                             FORMATS SUPPORTED
                           </h4>
                           <div className="space-y-2.5">
-                            <div className="flex items-center gap-2.5 text-sm text-white/90">
+                            {/* <div className="flex items-center gap-2.5 text-sm text-white/90">
                               <div className="w-1.5 h-1.5 rounded-full bg-white" />
                               <span>Youtube</span>
-                            </div>
+                            </div> */}
                             <div className="flex items-center gap-2.5 text-sm text-white/90">
                               <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                              <span>
-                                X/Instagram and Other social media links
-                              </span>
+                              <span>Images</span>
                             </div>
                             <div className="flex items-center gap-2.5 text-sm text-white/90">
                               <div className="w-1.5 h-1.5 rounded-full bg-white" />
@@ -658,7 +668,7 @@ export function QuickCaptureModal({
                           whileHover={{ scale: 1.01 }}
                           whileTap={{ scale: 0.99 }}
                           onClick={handleAnalyze}
-                          className="w-full py-3.5 rounded-2xl font-medium transition-all flex items-center justify-center gap-2 bg-white text-black hover:bg-[#EDEDED]"
+                          className={`w-full py-3.5 rounded-2xl font-medium transition-all flex items-center justify-center gap-2 bg-white text-black hover:bg-[#EDEDED]`}
                         >
                           <Sparkles className="w-4 h-4" />
                           Analyze with KAI AI
@@ -703,7 +713,7 @@ export function QuickCaptureModal({
                         />
 
                         <div
-                          className="rounded-2xl border-2 border-dashed border-white/[0.06] p-16 text-center bg-[#0B0B0D]/30 hover:border-white/[0.1] transition-all cursor-pointer"
+                          className="rounded-2xl border-2 border-dashed border-white/[0.06] p-16 text-center bg-zinc-900/30 hover:border-white/[0.1] transition-all cursor-pointer"
                           onClick={() => fileInputRef.current?.click()}
                           onDragOver={(e) => {
                             e.preventDefault();
@@ -772,43 +782,22 @@ export function QuickCaptureModal({
                     {activeTab === "ideation" && (
                       <div className="space-y-5">
                         {/* Card-Style Type Selection */}
-                        <div className="grid grid-cols-2 gap-3">
-                          {ideaTypes.map((type) => {
-                            const Icon = type.icon;
-                            return (
-                              <button
-                                key={type.id}
-                                onClick={() => setSelectedIdeaType(type.id)}
-                                className={`p-5 rounded-2xl border transition-all text-left ${
-                                  selectedIdeaType === type.id
-                                    ? "bg-[#18181B] border-white/[0.12] shadow-lg"
-                                    : "bg-[#0B0B0D]/50 border-white/[0.06] hover:border-white/[0.1] hover:bg-[#18181B]/50"
-                                }`}
-                                style={
-                                  selectedIdeaType === type.id
-                                    ? {
-                                        boxShadow:
-                                          "0 12px 24px rgba(0,0,0,0.6)",
-                                      }
-                                    : undefined
-                                }
-                              >
-                                <Icon
-                                  className={`w-6 h-6 mb-3 ${
-                                    selectedIdeaType === type.id
-                                      ? "text-white"
-                                      : "text-white/45"
-                                  }`}
-                                />
-                                <h3 className="font-medium mb-1 text-white">
-                                  {type.title}
-                                </h3>
-                                <p className="text-xs text-white/85">
-                                  {type.description}
-                                </p>
-                              </button>
-                            );
-                          })}
+                        <div className="space-y-5">
+                          <div className="py-20 text-center">
+                            <motion.div
+                              initial={{ scale: 0.9, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <Clock className="w-20 h-20 mx-auto mb-6 text-white/25" />
+                              <h3 className="text-4xl font-semibold mb-3 text-white">
+                                Coming Soon.....
+                              </h3>
+                              <p className="text-white/70">
+                                Stay tuned with TAGZZS
+                              </p>
+                            </motion.div>
+                          </div>
                         </div>
 
                         {/* Dynamic Editor */}
@@ -1071,11 +1060,17 @@ export function QuickCaptureModal({
                     >
                       {/* Thumbnail */}
                       <div className="relative w-full h-64 bg-[#000000]">
-                        <img
-                          src={previewData.thumbnail}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
+                        {previewData.thumbnail ? (
+                          <img
+                            src={previewData.thumbnail}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-white/20">
+                            <Sparkles className="w-12 h-12 opacity-50" />
+                          </div>
+                        )}
                       </div>
 
                       {/* Content */}
