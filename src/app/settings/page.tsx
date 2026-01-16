@@ -21,6 +21,15 @@ export default function SettingsPage() {
   const [username, setUsername] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isAvatarHovered, setIsAvatarHovered] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Delete Account State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
 
   // Sync state with user data when it loads
   useEffect(() => {
@@ -31,6 +40,48 @@ export default function SettingsPage() {
       setAvatarUrl(user.user_metadata?.avatar_url || null);
     }
   }, [user]);
+
+  const handleDeleteClick = () => {
+    setIsDeleteModalOpen(true);
+    setDeleteConfirmation('');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== 'DELETE') {
+      return;
+    }
+    
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        toast.success("Account deleted successfully");
+        // Force sign out on client side too mostly for clearing context state
+        // The backend already cleared cookies
+        await signOut(); 
+        router.push('/');
+      } else {
+        const data = await response.json();
+        toast.error(data.detail || "Failed to delete account");
+      }
+    } catch (error) {
+      console.error('Delete account error:', error);
+      toast.error("An error occurred while deleting your account");
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteModalOpen(false);
+    }
+  };
+
+
+
 
   // Security state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -48,14 +99,38 @@ export default function SettingsPage() {
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+
+  // Track original values to detect changes
+  const [originalValues, setOriginalValues] = useState({
+    fullName: '',
+    email: ''
+  });
+
+  // Sync original values when user loads
+  useEffect(() => {
+    if (user) {
+      const name = user.user_metadata?.full_name || user.user_metadata?.name || 'User';
+      const userEmail = user.email || '';
+      setOriginalValues({ fullName: name, email: userEmail });
+    }
+  }, [user]);
 
   const handleAvatarClick = () => {
-    fileInputRef.current?.click();
+    setPreviewUrl(avatarUrl);
+    setSelectedFile(null);
+    setIsAvatarModalOpen(true);
   };
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleModalClose = () => {
+    setIsAvatarModalOpen(false);
+    setPreviewUrl(null);
+    setSelectedFile(null);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user?.id) return;
+    if (!file) return;
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
@@ -68,31 +143,36 @@ export default function SettingsPage() {
       return;
     }
 
-    // Show preview immediately
-    const previewUrl = URL.createObjectURL(file);
-    setAvatarUrl(previewUrl);
+    // Show preview
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    setSelectedFile(file);
+  };
 
-    // Upload to Supabase
+  const handleUploadClick = async () => {
+    if (!selectedFile || !user?.id) {
+      // If no file selected, trigger file picker
+      fileInputRef.current?.click();
+      return;
+    }
+
+    setIsUploading(true);
     try {
-      toast.loading('Uploading profile picture...', { id: 'avatar-upload' });
-      
       const { uploadAvatar } = await import('@/utils/avatar-upload');
-      const result = await uploadAvatar(file, user.id);
+      const result = await uploadAvatar(selectedFile, user.id);
 
       if (result.success && result.url) {
         setAvatarUrl(result.url);
-        // Refresh auth context so sidebar updates with new avatar
         await checkAuth();
-        toast.success('Profile picture updated!', { id: 'avatar-upload' });
+        toast.success('Profile picture updated!');
+        handleModalClose();
       } else {
-        // Revert to previous avatar on failure
-        setAvatarUrl(user.user_metadata?.avatar_url || null);
-        toast.error(result.error || 'Failed to upload profile picture', { id: 'avatar-upload' });
+        toast.error(result.error || 'Failed to upload profile picture');
       }
     } catch (error) {
-      // Revert to previous avatar on failure
-      setAvatarUrl(user.user_metadata?.avatar_url || null);
-      toast.error('Failed to upload profile picture', { id: 'avatar-upload' });
+      toast.error('Failed to upload profile picture');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -133,12 +213,55 @@ export default function SettingsPage() {
     }
   };
 
+  // Check if there are any changes
+  const hasChanges = () => {
+    return fullName !== originalValues.fullName || email !== originalValues.email;
+  };
+
   const handleSaveProfile = () => {
+    if (!hasChanges()) {
+      toast.error('No changes to save');
+      return;
+    }
+    setIsConfirmModalOpen(true);
+  };
+
+  const handleConfirmSave = async () => {
+    setIsConfirmModalOpen(false);
     setIsSavingProfile(true);
-    setTimeout(() => {
+
+    try {
+      const updates: { name?: string; email?: string } = {};
+      
+      if (fullName !== originalValues.fullName) {
+        updates.name = fullName;
+      }
+      if (email !== originalValues.email) {
+        updates.email = email;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(updates),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.detail || 'Failed to update profile');
+      } else {
+        setOriginalValues({ fullName, email });
+        await checkAuth();
+        toast.success('Profile updated successfully');
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+      toast.error('Something went wrong. Please try again.');
+    } finally {
       setIsSavingProfile(false);
-      toast.success('Profile updated successfully');
-    }, 1000);
+    }
   };
 
   const handleChangePassword = () => {
@@ -175,7 +298,195 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-black h-screen">
+    <>
+      {/* Delete Account Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setIsDeleteModalOpen(false)}
+        >
+          <div 
+            className="relative bg-[#0a0a0a] border border-red-500/20 rounded-2xl p-8 w-[420px] shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="absolute top-4 right-4 p-1 text-zinc-500 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
+                <AlertCircle size={24} className="text-red-500" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Delete Account</h3>
+              <p className="text-sm text-zinc-400">
+                This action cannot be undone. This will permanently delete your account and remove your data from our servers.
+              </p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="text-xs text-zinc-500 uppercase font-medium tracking-wider text-center">
+                Type <span className="text-red-500 font-bold select-none">DELETE</span> to confirm
+              </div>
+              <SettingsInput
+                value={deleteConfirmation}
+                onChange={setDeleteConfirmation}
+                placeholder="Type DELETE"
+                className="text-center font-bold tracking-wide border-red-900/30 focus:border-red-500/50"
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-sm font-medium border border-white/10 hover:border-white/20 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmation !== 'DELETE' || isDeleting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all shadow-lg shadow-red-900/20"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Avatar Upload Modal */}
+      {isAvatarModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={handleModalClose}
+        >
+          <div 
+            className="relative bg-[#0a0a0a] border border-[#2a2a2a] rounded-3xl p-10 w-[400px] shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={handleModalClose}
+              className="absolute top-4 right-4 p-1 text-zinc-500 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Preview circle */}
+            <div className="flex flex-col items-center">
+              <div className="h-40 w-40 rounded-full bg-gradient-to-br from-purple-600 to-purple-400 flex items-center justify-center text-5xl font-bold text-white overflow-hidden border-4 border-[#2a2a2a] shadow-xl mb-8">
+                {previewUrl ? (
+                  <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
+                ) : (
+                  fullName.charAt(0).toUpperCase()
+                )}
+              </div>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+
+              {/* Upload button */}
+              <button
+                onClick={handleUploadClick}
+                disabled={isUploading}
+                className="w-full px-6 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-sm font-medium border border-white/10 hover:border-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Uploading...
+                  </>
+                ) : selectedFile ? (
+                  'Save Photo'
+                ) : (
+                  <>
+                    <Camera size={16} />
+                    Choose Photo
+                  </>
+                )}
+              </button>
+
+              {selectedFile && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-3 text-xs text-zinc-500 hover:text-purple-400 transition-colors"
+                >
+                  Choose a different photo
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Update Confirmation Modal */}
+      {isConfirmModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setIsConfirmModalOpen(false)}
+        >
+          <div 
+            className="relative bg-[#0a0a0a] border border-[#2a2a2a] rounded-2xl p-8 w-[420px] shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setIsConfirmModalOpen(false)}
+              className="absolute top-4 right-4 p-1 text-zinc-500 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="text-lg font-semibold text-white mb-2">Confirm Changes</h3>
+            <p className="text-sm text-zinc-400 mb-6">Are you sure you want to update your profile?</p>
+
+            {/* Show what will be changed */}
+            <div className="space-y-3 mb-6 p-4 rounded-xl bg-white/5 border border-white/10">
+              {fullName !== originalValues.fullName && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-400">Full Name</span>
+                  <span className="text-white">{originalValues.fullName} → <span className="text-purple-400">{fullName}</span></span>
+                </div>
+              )}
+              {email !== originalValues.email && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-400">Email</span>
+                  <span className="text-white">{originalValues.email} → <span className="text-purple-400">{email}</span></span>
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-sm font-medium border border-white/10 hover:border-white/20 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSave}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium transition-all"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto bg-black h-screen">
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 pb-20">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -205,7 +516,7 @@ export default function SettingsPage() {
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
                 ) : (
-                  fullName.charAt(0).toUpperCase()
+                  originalValues.fullName.charAt(0).toUpperCase()
                 )}
               </div>
               {/* Camera overlay */}
@@ -219,19 +530,11 @@ export default function SettingsPage() {
                   className="text-white"
                 />
               </div>
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarChange}
-                className="hidden"
-              />
             </div>
             
             <div className="flex-1 space-y-1">
-              <h2 className="text-xl font-semibold text-white">{fullName || 'User'}</h2>
-              <p className="text-sm text-zinc-400">{email || 'No email'}</p>
+              <h2 className="text-xl font-semibold text-white">{originalValues.fullName || 'User'}</h2>
+              <p className="text-sm text-zinc-400">{originalValues.email || 'No email'}</p>
               <div className="flex items-center gap-3 mt-2">
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold">
                   PRO
@@ -279,15 +582,6 @@ export default function SettingsPage() {
                   value={email}
                   onChange={setEmail}
                   placeholder="your.email@example.com"
-                  disabled
-                />
-              </SettingField>
-
-              <SettingField label="Username" description="Optional display name">
-                <SettingsInput
-                  value={username}
-                  onChange={setUsername}
-                  placeholder="username"
                 />
               </SettingField>
 
@@ -301,7 +595,7 @@ export default function SettingsPage() {
             </SettingsCard>
 
             {/* Security Settings */}
-            <SettingsCard
+            {/* <SettingsCard
               title="Security Settings"
               description="Manage your password and authentication"
             >
@@ -334,7 +628,7 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </SettingField>
-            </SettingsCard>
+            </SettingsCard> */}
 
             {/* Preferences */}
             {/* <SettingsCard
@@ -418,7 +712,9 @@ export default function SettingsPage() {
                   </button> */}
 
                 <div className="pt-4 border-t border-white/5">
-                  <button className="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-all group">
+                  <button 
+                  onClick={handleDeleteClick}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-all group">
                     <div className="flex items-center gap-3">
                       <AlertCircle size={16} className="text-red-400" />
                       <div className="text-left">
@@ -465,6 +761,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

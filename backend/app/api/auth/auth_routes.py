@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from app.api.auth.schemas import SignUpRequest, SignInRequest
 from app.api.auth.supabase_client import get_supabase, get_supabase_admin
 from app.api.dependencies import get_current_user, get_optional_user
-
+from pydantic import BaseModel
 
 # Environment Check for Cookie Security
 # We assume production if the backend URL starts with https
@@ -503,6 +503,72 @@ async def get_me(user: Optional[Dict[str, Any]] = Depends(get_optional_user)):
         print(f"User validation failed: {e}")
         raise HTTPException(status_code=401, detail="User validation failed")
 
+class UpdateProfileRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+
+@router.put("/profile")
+async def update_profile(
+    body: UpdateProfileRequest, 
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Updates the user's profile information (name, email).
+    """
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid user session")
+
+    admin_supabase = get_supabase_admin()
+    
+    try:
+        # Prepare updates for users table
+        db_updates = {}
+        auth_metadata_updates = {}
+        
+        if body.name is not None:
+            db_updates["name"] = body.name
+            auth_metadata_updates["name"] = body.name
+            auth_metadata_updates["full_name"] = body.name
+            
+        # Handle email change
+        if body.email is not None:
+            try:
+                admin_supabase.auth.admin.update_user_by_id(
+                    user_id,
+                    {"email": body.email}
+                )
+                db_updates["email"] = body.email
+            except Exception as email_error:
+                print(f"Email update warning: {email_error}")
+        
+        # Update users table
+        if db_updates:
+            db_updates["updated_at"] = datetime.utcnow().isoformat()
+            admin_supabase.table("users").update(db_updates).eq("userid", user_id).execute()
+        
+        # Update Auth user metadata
+        if auth_metadata_updates:
+            admin_supabase.auth.admin.update_user_by_id(
+                user_id,
+                {"user_metadata": auth_metadata_updates}
+            )
+        
+        return {
+            "success": True,
+            "message": "Profile updated successfully",
+            "data": {
+                "updated_fields": list(db_updates.keys())
+            }
+        }
+        
+    except Exception as e:
+        print(f"Profile update error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update profile: {str(e)}"
+        )
 
 @router.delete("/delete")
 async def delete_account(
@@ -535,9 +601,20 @@ async def delete_account(
             print(f"Failed to cleanup avatar storage: {storage_error}")
 
         # 2. Delete from public.users table
+        admin_supabase.table("promo_code_usage").delete().eq("userid", user_id).execute()
+        
+        # 3. Delete from other likely dependent tables (manually to be safe)
+        try:
+            admin_supabase.table("messages").delete().eq("userid", user_id).execute()
+            admin_supabase.table("conversations").delete().eq("userid", user_id).execute()
+            admin_supabase.table("content").delete().eq("userid", user_id).execute()
+        except Exception as dep_error:
+            print(f"Warning during dependency cleanup: {dep_error}")
+
+        # 4. Delete from public.users table
         admin_supabase.table("users").delete().eq("userid", user_id).execute()
 
-        # 2. Delete from Supabase Auth (admin_delete_user)
+        # 5. Delete from Supabase Auth (admin_delete_user)
         # This is critical to actually remove the account login
         admin_supabase.auth.admin.delete_user(user_id)
 
