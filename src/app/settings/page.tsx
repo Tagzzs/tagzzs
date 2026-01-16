@@ -108,7 +108,7 @@ export default function SettingsPage() {
     setIsRedeeming(true);
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/promo/redeem`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/promo/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

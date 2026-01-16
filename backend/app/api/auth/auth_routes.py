@@ -229,7 +229,6 @@ async def auth_callback(
 @router.post("/sign-up", status_code=status.HTTP_201_CREATED)
 async def sign_up(body: SignUpRequest, response: Response):
     supabase = get_supabase()
-    promo_code = 'KAI200' # TODO: IN FUTURE CHANGE PROMO CODE TO BE PASSED FROM THE FRONTEND
 
     # Attempt user creation with Supabase Auth
     try:
@@ -297,11 +296,11 @@ async def sign_up(body: SignUpRequest, response: Response):
             on_conflict="userid",
         ).execute()
 
-        if promo_code:
+        if body.promo_code:
             try:
                 supabase.rpc("apply_promo", {
                     "p_userid": user_id,
-                    "p_code": promo_code
+                    "p_code": str(body.promo_code)
                 }).execute()
             except Exception as e:
                 print(f"Promo Code Warning: {e}")
