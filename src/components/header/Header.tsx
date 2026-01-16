@@ -2,6 +2,7 @@
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import ShinyText from '../ShinyText';
+import { useUserDisplayName } from '@/hooks/use-user-display-name';
 
 interface HeaderProps {
     onResetFilter: () => void;
@@ -15,6 +16,7 @@ const filterTags = [
 ];
 
 export default function Header({ onResetFilter }: HeaderProps) {
+    const displayName = useUserDisplayName();
     return (
         <div className="px-4 md:px-8 lg:px-10 pt-6 md:pt-10 pb-2 mt-4 shrink-0 bg-black">
             <div className="flex items-center gap-2 lg:hidden mb-4">
@@ -23,7 +25,7 @@ export default function Header({ onResetFilter }: HeaderProps) {
             </div>
 
             <h2 className="text-[32px] md:text-[48px] lg:text-[60px] font-medium text-white tracking-tight leading-none">
-                Good morning, <ShinyText text="User." disabled={false} speed={20} delay={0.8} color="#bfbfbf" spread={160} className="font-medium" />
+                Good morning, <ShinyText text={`${displayName}.`} disabled={false} speed={20} delay={0.8} color="#bfbfbf" spread={160} className="font-medium" />
             </h2>
             <p className="text-zinc-500 text-[18px] md:text-[24px] lg:text-[30px] font-normal mt-2 mb-6">
                 Let&apos;s get productive.
