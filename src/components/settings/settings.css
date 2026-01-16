@@ -1,0 +1,29 @@
+/* Scrollbar Styles - Purple themed for premium feel - Scoped to settings-modal if possible or used globally */
+.settings-modal-content ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.settings-modal-content ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 5px;
+}
+
+.settings-modal-content ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.6) 0%, rgba(124, 58, 237, 0.4) 100%);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: all 0.3s ease;
+}
+
+.settings-modal-content ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.8) 0%, rgba(124, 58, 237, 0.6) 100%);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+}
+
+.settings-modal-content ::-webkit-scrollbar-corner {
+  background: transparent;
+}

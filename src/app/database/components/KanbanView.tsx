@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useRef, useState } from 'react';
+import { memo, useRef, useState, useEffect } from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 
 interface TreeNode {
@@ -40,6 +40,13 @@ function KanbanView({
             containerRef.current.scrollLeft += e.deltaY;
         }
     };
+
+    // Reset scroll position when treeData changes (e.g. search / filter update)
+    useEffect(() => {
+        if (containerRef.current) {
+            containerRef.current.scrollLeft = 0;
+        }
+    }, [treeData]);
 
     return (
         <div

@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useContent } from "@/hooks/useContent";
 import { useTags } from "@/hooks/useTags";
@@ -21,6 +21,10 @@ const UUID_REGEX =
 export default function ContentPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const source = searchParams.get("source");
+  const isNeuralSource = source === "neural-graph";
+
   const id = params.id as string;
 
   // Fetch content and tags
@@ -47,7 +51,7 @@ export default function ContentPage() {
 
     const tags = currentItem.tagsId
       .map((tagId) => tagsMap.get(tagId))
-      .filter((t) => t !== undefined);
+      .filter((t: any) => t !== undefined);
 
     return {
       id: currentItem.id,
@@ -59,7 +63,7 @@ export default function ContentPage() {
       title: currentItem.title,
       desc: currentItem.description || "No description available.",
       content: currentItem.personalNotes || "", // Display personal notes in Notes section
-      tags: tags.map((t) => {
+      tags: tags.map((t: any) => {
         let name = t.tagName;
         // If the tag name looks like a UUID, it might be a mistakenly created tag where the name IS the ID of another tag.
         // Try to resolve the real name from the tagsMap.
@@ -80,7 +84,7 @@ export default function ContentPage() {
     return content.map((item) => {
       const tags = item.tagsId
         .map((tagId) => tagsMap.get(tagId))
-        .filter((t) => t !== undefined);
+        .filter((t: any) => t !== undefined);
 
       return {
         id: item.id,
@@ -114,10 +118,14 @@ export default function ContentPage() {
 
       const newIndex = currentIndex + direction;
       if (newIndex >= 0 && newIndex < content.length) {
-        router.push(`/content/${content[newIndex].id}`);
+        if (isNeuralSource) {
+          router.push(`/content/${content[newIndex].id}?source=neural-graph`);
+        } else {
+          router.push(`/content/${content[newIndex].id}`);
+        }
       }
     },
-    [content, id, router]
+    [content, id, router, isNeuralSource]
   );
 
   const handleToggleSummary = useCallback(() => {
@@ -151,12 +159,16 @@ export default function ContentPage() {
         body: { contentId: currentDetailItem.id },
       });
 
-      // Redirect to database on success
-      router.push("/database");
+      // Redirect to database/neural on success
+      if (isNeuralSource) {
+        router.push("/neural-graph");
+      } else {
+        router.push("/database");
+      }
     } catch (error) {
       console.error("Failed to delete content:", error);
     }
-  }, [currentDetailItem, api, router]);
+  }, [currentDetailItem, api, router, isNeuralSource]);
 
   // Save Handler
   const handleSave = useCallback(
@@ -194,11 +206,11 @@ export default function ContentPage() {
       if (newTagsIds.length === 0) {
         // Find "Uncategorized" or "General" tag
         let fallbackTag = Array.from(tagsMap.values()).find(
-          (t) => t.tagName.toLowerCase() === "uncategorized"
+          (t: any) => t.tagName.toLowerCase() === "uncategorized"
         );
         if (!fallbackTag) {
           fallbackTag = Array.from(tagsMap.values()).find(
-            (t) => t.tagName.toLowerCase() === "general"
+            (t: any) => t.tagName.toLowerCase() === "general"
           );
         }
 
@@ -214,6 +226,7 @@ export default function ContentPage() {
 
   // Search Mode State for Floating Bar
   const [searchMode, setSearchMode] = useState<"DB" | "AI">("DB");
+
 
   return (
     <div className="flex h-screen w-full bg-black overflow-hidden relative">
@@ -256,10 +269,10 @@ export default function ContentPage() {
             </div>
             <p className="text-lg">Content not found</p>
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push(isNeuralSource ? "/neural-graph" : "/dashboard")}
               className="mt-4 text-zinc-400 hover:text-white border border-zinc-700 px-4 py-2 rounded-lg transition-colors"
             >
-              Return to Dashboard
+              Return to {isNeuralSource ? "Neural Graph" : "Dashboard"}
             </button>
           </div>
         ) : (
@@ -271,7 +284,7 @@ export default function ContentPage() {
             aiSummaryText={
               aiSummaryText || "AI summary generation not yet connected."
             }
-            onBack={() => router.push("/database")}
+            onBack={() => router.push(isNeuralSource ? "/neural-graph" : "/database")}
             onNavigate={handleNavigate}
             onToggleEditing={() => setIsEditing(!isEditing)}
             onToggleSummary={handleToggleSummary}

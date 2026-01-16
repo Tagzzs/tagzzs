@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useContent, ContentItem } from './useContent';
 import { useTags, TagNode } from './useTags';
+import { buildTreeData } from '@/utils/buildTreeData';
 
 // Graph node types for neural visualization
 export interface GraphNode {
@@ -70,6 +71,9 @@ export function useGraphData() {
 
   // Build graph data from tags and content
   const graphData = useMemo<GraphData>(() => {
+    // Use shared buildTreeData for consistency
+    const treeData = buildTreeData(tagTree, content, tagsMap);
+    
     const nodes: GraphNode[] = [];
     const links: GraphLink[] = [];
     const deepData: DeepDataCategory[] = [];
@@ -86,88 +90,91 @@ export function useGraphData() {
       color: COLORS.root,
     });
 
-    // Create content lookup by tag
-    const tagContentMap = new Map<string, ContentItem[]>();
-    content.forEach((item) => {
-      if (item.tagsId && item.tagsId.length > 0) {
-        item.tagsId.forEach((tagId) => {
-          if (!tagContentMap.has(tagId)) {
-            tagContentMap.set(tagId, []);
-          }
-          tagContentMap.get(tagId)!.push(item);
-        });
-      }
-    });
-
-    // Uncategorized content
-    const uncategorizedContent = content.filter(
-      (item) => !item.tagsId || item.tagsId.length === 0
-    );
-
     // Layout parameters
     const catRadius = 350;
     const subRadius = 120;
     const contentRadius = 50;
 
-    // Build from tag tree (parent tags = categories)
-    tagTree.forEach((parentTag, catIndex) => {
+    treeData.forEach((category: any, catIndex: number) => {
       // Calculate category position
-      const phi = Math.acos(-1 + (2 * catIndex) / Math.max(tagTree.length, 1));
-      const theta = Math.sqrt(Math.max(tagTree.length, 1) * Math.PI) * phi;
+      const phi = Math.acos(-1 + (2 * catIndex) / Math.max(treeData.length, 1));
+      const theta = Math.sqrt(Math.max(treeData.length, 1) * Math.PI) * phi;
       const cx = catRadius * Math.cos(theta) * Math.sin(phi);
       const cy = catRadius * Math.sin(theta) * Math.sin(phi);
       const cz = catRadius * Math.cos(phi);
 
-      const catId = `cat-${parentTag.id}`;
+      const catId = `cat-${catIndex}`; 
+
+      // Graph nodes need valid unique IDs.
+      const graphCatId = category.tagId ? `cat-${category.tagId}` : `cat-uncategorized`;
+
       nodes.push({
-        id: catId,
-        label: parentTag.tagName,
+        id: graphCatId,
+        label: category.name,
         type: 'category',
         x: cx,
         y: cy,
         z: cz,
         radius: 8,
-        color: parentTag.tagColor || COLORS.cat,
+        color: category.tagColor || (category.name === 'Uncategorized' ? '#808080' : COLORS.cat),
         parent: 'root',
       });
-      links.push({ source: 'root', target: catId });
+      links.push({ source: 'root', target: graphCatId });
 
-      // For deepData structure
-      const category: DeepDataCategory = {
-        name: parentTag.tagName,
-        tagId: parentTag.id,
-        subs: [],
-      };
+      const subItemsForDeepData: DeepDataSub[] = [];
 
-      // Child tags = subcategories
-      if (parentTag.children && parentTag.children.length > 0) {
-        parentTag.children.forEach((childTag, subIndex) => {
-          const sx = cx + subRadius * Math.cos(subIndex * 1.5 + catIndex);
-          const sy = cy + subRadius * Math.sin(subIndex * 1.5 + catIndex);
-          const sz = cz + subRadius * Math.cos(subIndex * 1.5);
+      category.children.forEach((sub: any, subIndex: number) => {
+        const sx = cx + subRadius * Math.cos(subIndex * 1.5 + catIndex);
+        const sy = cy + subRadius * Math.sin(subIndex * 1.5 + catIndex);
+        const sz = cz + subRadius * Math.cos(subIndex * 1.5);
 
-          const subId = `sub-${childTag.id}`;
-          nodes.push({
-            id: subId,
-            label: childTag.tagName,
-            type: 'sub',
-            x: sx,
-            y: sy,
-            z: sz,
-            radius: 5,
-            color: childTag.tagColor || COLORS.sub,
-            parent: catId,
-          });
-          links.push({ source: catId, target: subId });
+        // Sub ID
+        const graphSubId = sub.tagId ? `sub-${sub.tagId}` : `sub-${graphCatId}-${subIndex}`;
+        
+        // If sub name is empty (direct items), we might still want a node or attach directly to cat?
+        // Original logic: items on parent had no sub node, attached directly to cat.
+        // buildTreeData puts them in empty named sub or 'General'.
+        
+        let parentNodeId = graphCatId;
 
-          // Get content for this child tag
-          const subContent = tagContentMap.get(childTag.id) || [];
-          const subItems: DeepDataItem[] = [];
+        // Only create a SUB node if it has a name (actual tag or General)
+        // If name is empty, it means "Direct Content" (previously handled by parentContent logic)
+        // But wait, if we don't create a sub node, where do we attach content?
+        // If name is NOT empty, create sub node.
+        if (sub.name) {
+             nodes.push({
+                id: graphSubId,
+                label: sub.name,
+                type: 'sub',
+                x: sx,
+                y: sy,
+                z: sz,
+                radius: 5,
+                color: sub.tagColor || COLORS.sub,
+                parent: graphCatId,
+             });
+             links.push({ source: graphCatId, target: graphSubId });
+             parentNodeId = graphSubId;
+        }
 
-          subContent.forEach((item, contentIndex) => {
-            const kx = sx + contentRadius * Math.cos(contentIndex * 2 + subIndex);
-            const ky = sy + contentRadius * Math.sin(contentIndex * 2 + subIndex);
-            const kz = sz + contentRadius * Math.cos(contentIndex * 2);
+        const deepItems: DeepDataItem[] = [];
+
+        sub.items.forEach((item: any, contentIndex: number) => {
+            // Position depend on whether it's around sub or cat
+            // If sub.name is empty, it's around cat (conceptually) but we need coord logic.
+            // Let's use the sub-calculated coords (sx,sy,sz) as base even if sub node doesn't exist?
+            // Or if sub node doesn't exist, we use cx,cy,cz logic?
+            
+            let kx, ky, kz;
+            if (sub.name) {
+                kx = sx + contentRadius * Math.cos(contentIndex * 2 + subIndex);
+                ky = sy + contentRadius * Math.sin(contentIndex * 2 + subIndex);
+                kz = sz + contentRadius * Math.cos(contentIndex * 2);
+            } else {
+                 kx = cx + contentRadius * Math.cos(contentIndex * 2);
+                 ky = cy + contentRadius * Math.sin(contentIndex * 2);
+                 kz = cz + contentRadius * Math.cos(contentIndex * 2);
+            }
 
             const contentId = `content-${item.id}`;
             nodes.push({
@@ -179,137 +186,36 @@ export function useGraphData() {
               z: kz,
               radius: 3,
               color: COLORS.content,
-              parent: subId,
+              parent: parentNodeId,
               data: item,
             });
-            links.push({ source: subId, target: contentId });
+            links.push({ source: parentNodeId, target: contentId });
 
-            subItems.push({
+            deepItems.push({
               name: item.title || 'Untitled',
               desc: item.description || '',
               image: item.thumbnailUrl || 'https://picsum.photos/seed/default/800/400',
               content: item.description || '',
               contentId: item.id,
             });
-          });
-
-          category.subs.push({
-            name: childTag.tagName,
-            tagId: childTag.id,
-            items: subItems,
-          });
-        });
-      }
-
-      // Content directly on parent tag (no subcategory)
-      const parentContent = tagContentMap.get(parentTag.id) || [];
-      if (parentContent.length > 0) {
-        const directItems: DeepDataItem[] = [];
-
-        parentContent.forEach((item, contentIndex) => {
-          const kx = cx + contentRadius * Math.cos(contentIndex * 2);
-          const ky = cy + contentRadius * Math.sin(contentIndex * 2);
-          const kz = cz + contentRadius * Math.cos(contentIndex * 2);
-
-          const contentId = `content-${item.id}`;
-          nodes.push({
-            id: contentId,
-            label: item.title || 'Untitled',
-            type: 'content',
-            x: kx,
-            y: ky,
-            z: kz,
-            radius: 3,
-            color: COLORS.content,
-            parent: catId,
-            data: item,
-          });
-          links.push({ source: catId, target: contentId });
-
-          directItems.push({
-            name: item.title || 'Untitled',
-            desc: item.description || '',
-            image: item.thumbnailUrl || 'https://picsum.photos/seed/default/800/400',
-            content: item.description || '',
-            contentId: item.id,
-          });
         });
 
-        if (directItems.length > 0) {
-          category.subs.push({
-            name: '', // Empty name = items show directly without subcategory header
-            tagId: parentTag.id,
-            items: directItems,
-          });
-        }
-      }
-
-      if (category.subs.length > 0) {
-        deepData.push(category);
-      }
-    });
-
-    // Uncategorized content as a special category
-    if (uncategorizedContent.length > 0) {
-      const uncatId = 'cat-uncategorized';
-      const uncatAngle = tagTree.length * 1.2;
-      const cx = catRadius * Math.cos(uncatAngle);
-      const cy = catRadius * Math.sin(uncatAngle);
-      const cz = 0;
-
-      nodes.push({
-        id: uncatId,
-        label: 'Uncategorized',
-        type: 'category',
-        x: cx,
-        y: cy,
-        z: cz,
-        radius: 8,
-        color: '#808080',
-        parent: 'root',
-      });
-      links.push({ source: 'root', target: uncatId });
-
-      const uncatItems: DeepDataItem[] = [];
-
-      uncategorizedContent.forEach((item, contentIndex) => {
-        const kx = cx + contentRadius * Math.cos(contentIndex * 2);
-        const ky = cy + contentRadius * Math.sin(contentIndex * 2);
-        const kz = contentRadius * Math.cos(contentIndex * 2);
-
-        const contentId = `content-${item.id}`;
-        nodes.push({
-          id: contentId,
-          label: item.title || 'Untitled',
-          type: 'content',
-          x: kx,
-          y: ky,
-          z: kz,
-          radius: 3,
-          color: COLORS.content,
-          parent: uncatId,
-          data: item,
-        });
-        links.push({ source: uncatId, target: contentId });
-
-        uncatItems.push({
-          name: item.title || 'Untitled',
-          desc: item.description || '',
-          image: item.thumbnailUrl || 'https://picsum.photos/seed/default/800/400',
-          content: item.description || '',
-          contentId: item.id,
+        subItemsForDeepData.push({
+            name: sub.name,
+            tagId: sub.tagId || `sub-${subIndex}`,
+            items: deepItems
         });
       });
 
       deepData.push({
-        name: 'Uncategorized',
-        tagId: 'uncategorized',
-        subs: [{ name: '', tagId: 'uncategorized', items: uncatItems }], // Empty name = items show directly
+          name: category.name,
+          tagId: category.tagId || `cat-${catIndex}`,
+          subs: subItemsForDeepData
       });
-    }
+    });
 
     return { nodes, links, deepData };
-  }, [content, tagTree]);
+  }, [content, tagTree, tagsMap]);
 
   // Empty state check
   const isEmpty = !loading && graphData.nodes.length <= 1;

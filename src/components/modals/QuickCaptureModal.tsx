@@ -321,6 +321,7 @@ export function QuickCaptureModal({ isOpen, onClose }: QuickCaptureModalProps) {
   };
 
   const handleSave = async () => {
+    if (isLoading) return;
     setIsLoading(true);
     try {
       const BACKEND_URL =
@@ -1302,10 +1303,12 @@ export function QuickCaptureModal({ isOpen, onClose }: QuickCaptureModalProps) {
                   whileTap={{ scale: 0.98 }}
                   onClick={handleSave}
                   disabled={
+                    isLoading ||
                     viewState === "analyzing" ||
                     (activeTab === "ideation" && !selectedIdeaType)
                   }
-                  className={`px-8 py-2.5 rounded-xl font-medium transition-all ${
+                  className={`px-8 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2 ${
+                    isLoading ||
                     viewState === "analyzing" ||
                     (activeTab === "ideation" && !selectedIdeaType)
                       ? "bg-white/25 text-white/25 cursor-not-allowed"
@@ -1315,7 +1318,14 @@ export function QuickCaptureModal({ isOpen, onClose }: QuickCaptureModalProps) {
                     boxShadow: "0 12px 24px rgba(0,0,0,0.6)",
                   }}
                 >
-                  Save
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save"
+                  )}
                 </motion.button>
               </div>
             </div>
