@@ -90,7 +90,7 @@ export function useExtraction() {
       }
 
       const uploadData = await uploadResponse.json();
-      const fileUrl = uploadData.fileUrl;
+      const fileUrl = uploadData.fileUrl?.publicUrl;
 
       if (!fileUrl) {
         throw new Error('No file URL returned');
